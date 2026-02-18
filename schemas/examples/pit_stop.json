@@ -1,0 +1,14 @@
+{
+  "event_type": "pit_stop",
+  "timestamp": 1695123789.123,
+  "session_id": "2023_monaco_gp",
+  "driver_number": 44,
+  "driver_name": "Lewis Hamilton",
+  "position": 3,
+  "tire_compound": "SOFT",
+  "tire_age_laps": 0,
+  "pit_duration": 2.456,
+  "gap_to_leader": 12.345,
+  "gap_to_ahead": 3.210,
+  "sequence_number": 1842
+}

@@ -1,0 +1,9 @@
+{
+  "event_type": "track_status",
+  "timestamp": 1695124000.456,
+  "session_id": "2023_monaco_gp",
+  "driver_number": 0,
+  "driver_name": "RACE_CONTROL",
+  "track_status": "SAFETY_CAR",
+  "sequence_number": 2105
+}

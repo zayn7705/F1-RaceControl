@@ -1,0 +1,15 @@
+{
+  "event_type": "lap_complete",
+  "timestamp": 1695123456.789,
+  "session_id": "2023_monaco_gp",
+  "driver_number": 1,
+  "driver_name": "Max Verstappen",
+  "lap_number": 15,
+  "lap_time": 78.234,
+  "position": 1,
+  "tire_compound": "MEDIUM",
+  "tire_age_laps": 8,
+  "gap_to_leader": 0.0,
+  "gap_to_ahead": 0.0,
+  "sequence_number": 1501
+}

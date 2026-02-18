@@ -1,0 +1,16 @@
+# RaceControl Dependencies
+
+# Core data access
+fastf1>=3.1.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# JSON schema validation
+jsonschema>=4.17.0
+
+# Utilities
+python-dateutil>=2.8.0
+
+# Testing (optional for CP1)
+pytest>=7.4.0
+pytest-cov>=4.1.0
