@@ -21,7 +21,8 @@ RaceControl ingests historical F1 race data from FastF1 and normalizes it into a
 Export normalized events from a historical F1 race:
 
 ```bash
-python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/sample_events_hungary_2022.jsonl --max-events 500
+# Export full-race event log for replay
+python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/sample_events_hungary_2022.jsonl
 ```
 
 **Arguments:**
@@ -29,7 +30,7 @@ python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/
 - `--gp`: Grand Prix name (e.g., "Hungary", "Monaco", "Bahrain")
 - `--session`: Session type (default: "R" for race). Options: "FP1", "FP2", "FP3", "Q", "R", "S"
 - `--out`: Output JSONL file path
-- `--max-events`: (Optional) Maximum number of events to export
+- `--max-events`: (Optional) Maximum number of events to export for debugging or sampling
 
 The export script will:
 1. Load race data from FastF1 (uses cache if available for offline use)
@@ -81,11 +82,60 @@ See `schemas/examples/` for example events in the canonical format.
 - **Error Handling**: Clear error messages when race data is unavailable or incomplete
 - **Time Normalization**: Converts FastF1 timestamps to race-relative seconds for consistent replay
 
+## Deterministic Race Replay Engine
+
+RaceControl includes a deterministic race replay engine that consumes the canonical JSONL event log and maintains per-driver and global race state over time.
+
+### CLI Replay (`scripts/replay_cli.py`)
+
+Run an interactive replay from a JSONL file:
+
+```bash
+python scripts/replay_cli.py --events data/sample_events_hungary_2022.jsonl
+```
+
+**Arguments:**
+- `--events`: Path to the JSONL file exported by `scripts/export_events.py`
+- `--snapshot-interval`: Number of events between internal state snapshots (default: 50)
+- `--initial-speed`: Initial playback speed multiplier (default: 1.0)
+
+This starts a simple CLI REPL with commands:
+
+- `play`: Start/resume playback, advancing through all events until the end of the race
+- `pause`: Pause playback
+- `step [n]`: Apply 1 (or `n`) events and print the updated race state
+- `rewind <seconds>`: Jump backwards in race time by the given number of seconds
+- `ff <seconds>`: Fast-forward in race time by the given number of seconds
+- `jump_time <seconds>`: Jump to an absolute race time (seconds since lights out)
+- `speed <multiplier>`: Change playback speed (e.g., `2.0` for 2×, `0.5` for half-speed)
+- `status`: Print the current race state summary
+- `quit`: Exit the program
+
+During continuous playback (`play`):
+
+- The engine applies **every event in the log** in canonical order and runs until the final event is reached.
+- The CLI prints a tabular view of **all drivers** (up to 20), including:
+  - Position, driver code, lap
+  - Gap to leader on the current lap (derived from lap completion times)
+  - Tire compound, stint number, tire age in laps
+  - Last lap time in seconds
+- Output is throttled to a small, fixed number of prints per lap to keep the terminal readable, but no events are skipped in the engine.
+- When the last event has been applied, the CLI prints the final race state, shows a `Race complete. Exiting.` message, and terminates.
+
+Internally, the replay engine (`src/replay/engine.py`) maintains a `RaceState` with:
+
+- Per-driver state (`DriverState`): lap, position, compound, stint, tire age, last lap time, gap to leader, pit-stop count
+- Global state: current event index, race-relative time, track status
+- Periodic snapshots for efficient, deterministic rewind/fast-forward and time jumps
+
+Given the same JSONL event log, the replay engine guarantees deterministic state evolution and identical CLI output for the same sequence of user commands.
+
 ### Running Tests
 
 ```bash
 # Test schema validation and example events
 python tests/test_event_schema_examples.py
+python tests/test_race_state_engine.py
 ```
 
-The test suite validates that example events conform to the canonical schema and includes a smoke test for the event building pipeline.
+The test suite validates that example events conform to the canonical schema, includes a smoke test for the event building pipeline, and tests the deterministic race state engine (event application, snapshots, and basic CLI controller flows).
