@@ -37,9 +37,13 @@
           "title": "lap_complete payload",
           "properties": {
             "lap_time_s": {"type": ["number", "null"]},
+            "sector1_time_s": {"type": ["number", "null"]},
+            "sector2_time_s": {"type": ["number", "null"]},
+            "sector3_time_s": {"type": ["number", "null"]},
             "compound": {"type": ["string", "null"]},
             "stint": {"type": ["integer", "null"]},
             "tire_age_laps": {"type": ["integer", "null"]},
+            "tyre_life": {"type": ["number", "null"]},
             "position": {"type": ["integer", "null"]}
           },
           "additionalProperties": false

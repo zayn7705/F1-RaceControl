@@ -142,6 +142,28 @@ def _build_lap_complete_events(laps: pd.DataFrame, session) -> List[Dict[str, An
         if 'LapTime' in lap and not pd.isna(lap['LapTime']):
             lap_time = lap['LapTime'].total_seconds() if hasattr(lap['LapTime'], 'total_seconds') else float(lap['LapTime'])
         
+        # Get sector times
+        sector1_time = None
+        if 'Sector1Time' in lap and not pd.isna(lap['Sector1Time']):
+            sector1_time = lap['Sector1Time'].total_seconds() if hasattr(lap['Sector1Time'], 'total_seconds') else float(lap['Sector1Time'])
+        
+        sector2_time = None
+        if 'Sector2Time' in lap and not pd.isna(lap['Sector2Time']):
+            sector2_time = lap['Sector2Time'].total_seconds() if hasattr(lap['Sector2Time'], 'total_seconds') else float(lap['Sector2Time'])
+        
+        sector3_time = None
+        if 'Sector3Time' in lap and not pd.isna(lap['Sector3Time']):
+            sector3_time = lap['Sector3Time'].total_seconds() if hasattr(lap['Sector3Time'], 'total_seconds') else float(lap['Sector3Time'])
+        
+        # Get TyreLife (official tire life from F1 timing)
+        tyre_life = None
+        if 'TyreLife' in lap and not pd.isna(lap['TyreLife']):
+            tyre_life = float(lap['TyreLife'])
+        
+        # Use TyreLife if available, otherwise fall back to computed tire_age_laps
+        # Keep both for compatibility
+        final_tire_age = tyre_life if tyre_life is not None else tire_age
+        
         # Get position (if available)
         position = lap.get('Position', None)
         if pd.isna(position):
@@ -156,9 +178,13 @@ def _build_lap_complete_events(laps: pd.DataFrame, session) -> List[Dict[str, An
             "lap": int(lap_num),
             "payload": {
                 "lap_time_s": lap_time,
+                "sector1_time_s": sector1_time,
+                "sector2_time_s": sector2_time,
+                "sector3_time_s": sector3_time,
                 "compound": compound,
                 "stint": stint,
-                "tire_age_laps": tire_age,
+                "tire_age_laps": tire_age,  # Keep computed for backward compatibility
+                "tyre_life": tyre_life,  # Official F1 tire life
                 "position": position
             }
         }
@@ -183,70 +209,115 @@ def _build_pit_stop_events(laps: pd.DataFrame, session) -> List[Dict[str, Any]]:
         List of pit_stop event dictionaries
     """
     events = []
-    
-    for idx, lap in laps.iterrows():
-        driver = lap.get('Driver', None)
-        lap_num = lap.get('LapNumber', None)
-        
-        if pd.isna(driver) or pd.isna(lap_num):
+
+    # Try to get session start time for proper conversion
+    session_start = None
+    if session is not None and hasattr(session, 'date'):
+        try:
+            session_start = session.date
+        except:
+            pass
+
+    # Pair pit-in and pit-out across rows per driver.
+    # FastF1 often records PitInTime on one lap row and PitOutTime on the next.
+    for driver, driver_laps in laps.groupby('Driver', sort=False):
+        if pd.isna(driver):
             continue
-        
-        # Check if this lap has a pit stop (PitInTime present)
-        pit_in_time = None
-        pit_out_time = None
-        
-        # Try to get session start time for proper conversion
-        session_start = None
-        if session is not None and hasattr(session, 'date'):
-            try:
-                session_start = session.date
-            except:
-                pass
-        
-        if 'PitInTime' in lap and not pd.isna(lap['PitInTime']):
-            pit_in_time = _convert_time_to_race_seconds(lap['PitInTime'], session_start)
-        
-        if 'PitOutTime' in lap and not pd.isna(lap['PitOutTime']):
-            pit_out_time = _convert_time_to_race_seconds(lap['PitOutTime'], session_start)
-        
-        # Only create event if we have pit in time (pit entry is the event)
-        if pit_in_time is None:
-            continue
-        
-        # Calculate pit duration
-        pit_duration = None
-        if pit_in_time is not None and pit_out_time is not None:
-            pit_duration = pit_out_time - pit_in_time
-        
-        # Get stint after pit (next stint)
-        stint = lap.get('Stint', None)
-        if pd.isna(stint):
-            stint = None
-        else:
-            stint = int(stint)
-        
-        # Get compound after pit stop
-        compound_after = lap.get('Compound', None)
-        if pd.notna(compound_after):
-            compound_after = str(compound_after).upper()
-        else:
-            compound_after = None
-        
-        event = {
-            "event_time": pit_in_time,  # Use pit in time as event time
-            "event_type": "pit_stop",
-            "driver": str(driver),
-            "lap": int(lap_num),
-            "payload": {
-                "pit_in_time_s": pit_in_time,
-                "pit_out_time_s": pit_out_time,
-                "pit_duration_s": pit_duration,
-                "stint": stint,
-                "compound_after": compound_after
-            }
-        }
-        
-        events.append(event)
+
+        # Keep original order deterministic by Time then LapNumber.
+        ordered = driver_laps.sort_values(by=['Time', 'LapNumber'], na_position='last')
+        pending = None
+
+        for _, lap in ordered.iterrows():
+            lap_num = lap.get('LapNumber', None)
+            if pd.isna(lap_num):
+                continue
+
+            raw_in = lap.get('PitInTime', None)
+            raw_out = lap.get('PitOutTime', None)
+
+            pit_in_time = None
+            pit_out_time = None
+            if pd.notna(raw_in):
+                pit_in_time = _convert_time_to_race_seconds(raw_in, session_start)
+            if pd.notna(raw_out):
+                pit_out_time = _convert_time_to_race_seconds(raw_out, session_start)
+
+            # Start a pending pit stop when PitInTime appears.
+            if pit_in_time is not None:
+                pending = {
+                    "driver": str(driver),
+                    "lap": int(lap_num),
+                    "pit_in_time_s": pit_in_time
+                }
+
+                # If both in and out are on same row, finalize immediately.
+                if pit_out_time is not None:
+                    stint_val = lap.get('Stint', None)
+                    stint = None if pd.isna(stint_val) else int(stint_val)
+
+                    compound_val = lap.get('Compound', None)
+                    compound_after = str(compound_val).upper() if pd.notna(compound_val) else None
+
+                    events.append({
+                        "event_time": pit_in_time,
+                        "event_type": "pit_stop",
+                        "driver": pending["driver"],
+                        "lap": pending["lap"],
+                        "payload": {
+                            "pit_in_time_s": pit_in_time,
+                            "pit_out_time_s": pit_out_time,
+                            "pit_duration_s": pit_out_time - pit_in_time,
+                            "stint": stint,
+                            "compound_after": compound_after
+                        }
+                    })
+                    pending = None
+
+                continue
+
+            # Close pending pit stop when PitOutTime appears on a later row.
+            if pending is not None and pit_out_time is not None:
+                stint_val = lap.get('Stint', None)
+                stint = None if pd.isna(stint_val) else int(stint_val)
+
+                compound_val = lap.get('Compound', None)
+                compound_after = str(compound_val).upper() if pd.notna(compound_val) else None
+
+                pit_duration = None
+                if pending["pit_in_time_s"] is not None:
+                    pit_duration = pit_out_time - pending["pit_in_time_s"]
+
+                events.append({
+                    "event_time": pending["pit_in_time_s"],
+                    "event_type": "pit_stop",
+                    "driver": pending["driver"],
+                    "lap": pending["lap"],
+                    "payload": {
+                        "pit_in_time_s": pending["pit_in_time_s"],
+                        "pit_out_time_s": pit_out_time,
+                        "pit_duration_s": pit_duration,
+                        "stint": stint,
+                        "compound_after": compound_after
+                    }
+                })
+                pending = None
+
+        # If we ended with an unmatched pit-in, keep event with unknown out/duration.
+        if pending is not None:
+            events.append({
+                "event_time": pending["pit_in_time_s"],
+                "event_type": "pit_stop",
+                "driver": pending["driver"],
+                "lap": pending["lap"],
+                "payload": {
+                    "pit_in_time_s": pending["pit_in_time_s"],
+                    "pit_out_time_s": None,
+                    "pit_duration_s": None,
+                    "stint": None,
+                    "compound_after": None
+                }
+            })
     
     logger.info(f"Built {len(events)} pit_stop events")
     return events
@@ -256,34 +327,86 @@ def _build_track_status_events(session, timing_data: Optional[Any] = None) -> Li
     """
     Build track_status events from session data.
     
-    NOTE: FastF1's public API for track status/race control messages is limited.
-    This function attempts to extract track status if available, but may return
-    an empty list if data is not accessible through public APIs.
+    Extracts track status changes from session.track_status DataFrame if available.
     
     Args:
         session: FastF1 session object
-        timing_data: Optional timing data (may contain race control messages)
+        timing_data: Optional timing data (not used, kept for compatibility)
     
     Returns:
-        List of track_status event dictionaries (may be empty)
+        List of track_status event dictionaries
     """
     events = []
     
-    # FastF1 does not provide easy access to race control messages through
-    # the public Session API. The timing_data and telemetry may contain
-    # some information, but it's not reliably accessible.
-    # 
-    # For CP2, we document this as optional and return empty list.
-    # In a production system, you might:
-    # 1. Use FastF1's internal APIs (not recommended for stability)
-    # 2. Scrape F1 official timing data
-    # 3. Use a different data source
+    # Check if session has track_status DataFrame
+    if not hasattr(session, 'track_status') or session.track_status is None:
+        logger.debug("No track_status DataFrame available in session")
+        return events
     
-    logger.info("Track status events: Not implemented (FastF1 public API limitation)")
-    logger.info("Returning empty list. This is acceptable for CP2.")
-    
-    # Placeholder: If timing_data becomes available in future FastF1 versions,
-    # parse it here to extract track status changes
+    try:
+        track_status_df = session.track_status
+        
+        if len(track_status_df) == 0:
+            logger.debug("track_status DataFrame is empty")
+            return events
+        
+        # Status code mapping (from FastF1)
+        # 1 = AllClear (Green), 2 = Yellow, 6 = VSCDeployed, 7 = SCDeployed, etc.
+        status_map = {
+            1: "GREEN",
+            2: "YELLOW",
+            6: "VSC",
+            7: "SC",
+        }
+        
+        # Get session start time for conversion
+        session_start = None
+        if session is not None and hasattr(session, 'date'):
+            try:
+                session_start = session.date
+            except:
+                pass
+        
+        # Process each track status change
+        for idx, row in track_status_df.iterrows():
+            status_code = row.get('Status')
+            time_delta = row.get('Time')
+            message = row.get('Message', '')
+            
+            if pd.isna(status_code) or pd.isna(time_delta):
+                continue
+            
+            # Convert time to race-relative seconds
+            event_time = _convert_time_to_race_seconds(time_delta, session_start)
+            if event_time is None:
+                continue
+            
+            # Map status code to readable string
+            status_str = status_map.get(int(status_code), f"UNKNOWN_{int(status_code)}")
+            
+            # Use message if available, otherwise use mapped status
+            if pd.notna(message) and message:
+                status_str = str(message).upper()
+            
+            event = {
+                "event_time": event_time,
+                "event_type": "track_status",
+                "driver": None,  # Track status is global, not driver-specific
+                "lap": None,
+                "payload": {
+                    "status": status_str,
+                    "source": "fastf1_track_status"
+                }
+            }
+            
+            events.append(event)
+        
+        logger.info(f"Built {len(events)} track_status events")
+        
+    except Exception as e:
+        logger.warning(f"Error extracting track status events: {e}")
+        # Return empty list on error to maintain robustness
+        return []
     
     return events
 

@@ -6,6 +6,6 @@
   "lap": null,
   "payload": {
     "status": "YELLOW",
-    "source": "fastf1_race_control"
+    "source": "fastf1_track_status"
   }
 }

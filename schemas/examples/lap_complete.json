@@ -6,9 +6,13 @@
   "lap": 15,
   "payload": {
     "lap_time_s": 78.234,
+    "sector1_time_s": 25.123,
+    "sector2_time_s": 26.456,
+    "sector3_time_s": 26.655,
     "compound": "MEDIUM",
     "stint": 1,
     "tire_age_laps": 8,
+    "tyre_life": 8.0,
     "position": 1
   }
 }
