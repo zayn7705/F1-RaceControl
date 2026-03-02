@@ -38,7 +38,9 @@ data/*.csv
 data/*.parquet
 data/checkpoints/
 data/*.json
+data/*.jsonl
 !data/.gitkeep
+cache/
 logs/
 *.log
 

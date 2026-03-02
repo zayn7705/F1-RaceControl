@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RaceControl Canonical Event Schema",
+  "description": "Normalized event format for F1 race replay",
+  "type": "object",
+  "required": ["seq", "event_time", "event_type", "driver", "lap", "payload"],
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "description": "Monotonic sequence number assigned after sorting",
+      "minimum": 0
+    },
+    "event_time": {
+      "type": "number",
+      "description": "Seconds since race start (race-relative)",
+      "minimum": 0
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["lap_complete", "pit_stop", "track_status"],
+      "description": "Type of event"
+    },
+    "driver": {
+      "type": ["string", "null"],
+      "description": "Driver abbreviation (e.g., 'VER') or null for global events"
+    },
+    "lap": {
+      "type": ["integer", "null"],
+      "description": "Lap number if applicable, null otherwise",
+      "minimum": 1
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific fields",
+      "oneOf": [
+        {
+          "title": "lap_complete payload",
+          "properties": {
+            "lap_time_s": {"type": ["number", "null"]},
+            "sector1_time_s": {"type": ["number", "null"]},
+            "sector2_time_s": {"type": ["number", "null"]},
+            "sector3_time_s": {"type": ["number", "null"]},
+            "compound": {"type": ["string", "null"]},
+            "stint": {"type": ["integer", "null"]},
+            "tire_age_laps": {"type": ["integer", "null"]},
+            "tyre_life": {"type": ["number", "null"]},
+            "position": {"type": ["integer", "null"]}
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "pit_stop payload",
+          "properties": {
+            "pit_in_time_s": {"type": ["number", "null"]},
+            "pit_out_time_s": {"type": ["number", "null"]},
+            "pit_duration_s": {"type": ["number", "null"]},
+            "stint": {"type": ["integer", "null"]},
+            "compound_after": {"type": ["string", "null"]}
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "track_status payload",
+          "required": ["status", "source"],
+          "properties": {
+            "status": {"type": "string"},
+            "source": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}
