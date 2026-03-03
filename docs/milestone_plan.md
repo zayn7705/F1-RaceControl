@@ -10,7 +10,7 @@
   - Basic hello world script
 
 ### Checkpoint 2: Ingestion + Replay Engine
-- **Target Date**: Week 8
+- **Status**: Complete
 - **Deliverables**:
   - FastF1 data loader
   - Event normalization pipeline
