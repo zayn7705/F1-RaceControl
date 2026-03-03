@@ -1,85 +1,97 @@
-# AI Workflow Instructions
+# AI Agent Instructions for RaceControl Project
 
-**Purpose**: This document enables AI agents (LLMs) to quickly understand, build, run, and test the RaceControl project when starting a new conversation.
+You are an AI assistant helping with the **RaceControl** project: a Real-Time Formula 1 Strategy and Pit Decision Engine.
 
-## Quick Context for AI Agents
+## Project Context
 
-**Project**: RaceControl - Real-Time Formula 1 Strategy & Pit Decision Engine  
-**Current Status**: Checkpoint 2 (CP2) complete - Ingestion + Replay Engine working  
-**Language**: Python 3.8+  
-**Main Goal**: Replay historical F1 races as real-time event streams with configurable speed control
+**Project Goal**: Build a software system that replays past F1 races as real-time event streams and generates strategy recommendations in real time.
 
-**What Works Now**:
-- ✅ Load historical F1 race data from FastF1 (2018+)
-- ✅ Normalize events into canonical JSONL format
-- ✅ Replay races with speed control (1x, 5x, 20x)
-- ✅ Maintain deterministic race state (positions, gaps, tires, lap times)
+**Project Status**:
+- ✅ **Checkpoint 1 (CP1)**: Complete - Project proposal, repo setup, architecture design
+- ✅ **Checkpoint 2 (CP2)**: Complete - Ingestion + Replay Engine working
+- ⏳ **Checkpoint 3 (CP3)**: TODO - Race State Engine enhancements
+- ⏳ **Checkpoint 4 (CP4)**: TODO - Strategy Decision Engine
+- ⏳ **Checkpoint 5 (CP5)**: TODO - Reliability, Metrics, Demo
 
-**What's Next** (Future checkpoints):
-- Strategy decision engine (CP4)
-- Performance metrics (CP5)
-- Fault tolerance (CP5)
+**Current Capabilities**:
+- Load historical F1 race data from FastF1 (2018+)
+- Normalize events into canonical JSONL format
+- Replay races with configurable speed control (1x, 5x, 20x)
+- Maintain deterministic race state (positions, gaps, tires, lap times)
+
+**Next Milestones**:
+- CP3: Enhanced state engine with snapshotting and validation
+- CP4: Strategy engine (pit windows, undercut/overcut, safety car triggers)
+- CP5: Fault tolerance, performance metrics, demo interface
 
 ---
 
-## Project Structure (Quick Reference)
+## Your Role as AI Assistant
+
+When helping with this project:
+
+1. **Maintain Determinism**: All state evolution must be deterministic (same events → same state)
+2. **Follow Schema**: Always validate against `schemas/event_schema.json`
+3. **Test Changes**: Run test suite after modifications
+4. **Preserve Patterns**: Follow existing code patterns in `src/ingest/` and `src/replay/`
+5. **Handle Missing Data**: Use `src.utils.time_utils` for None-safe operations
+
+---
+
+## Project Structure
 
 ```
 src/
-├── ingest/              # Data ingestion (FASTF1 → normalized events)
+├── ingest/              # CP2: FastF1 → normalized events ✅
 │   ├── fastf1_loader.py    # load_race(year, gp, session_type)
 │   └── event_builder.py    # build_events(raw_data) → List[events]
-├── replay/              # Replay engine (events → race state)
-│   ├── engine.py          # RaceStateEngine - applies events deterministically
-│   ├── controller.py      # ReplayController - speed control, play/pause
-│   └── state.py           # RaceState, DriverState - data structures
+├── replay/              # CP2: Replay engine ✅
+│   ├── engine.py          # RaceStateEngine - deterministic state
+│   ├── controller.py      # ReplayController - speed control
+│   └── state.py           # RaceState, DriverState
 └── utils/
     └── time_utils.py      # None-safe sector time utilities
 
 scripts/
-├── export_events.py    # CLI: Export race to JSONL
-└── replay_cli.py       # CLI: Interactive replay
+├── export_events.py    # Export race to JSONL ✅
+└── replay_cli.py       # Interactive replay CLI ✅
 
 schemas/
 ├── event_schema.json   # Canonical event format (JSON Schema)
-└── examples/           # Example events for each type
+└── examples/          # Example events
 
-tests/                  # Test suite (pytest)
+tests/                  # Test suite
 ```
 
 ---
 
-## Setup (One-Time)
+## Quick Setup
 
 ```bash
-# 1. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 2. Verify (should print "RaceControl repo setup successful!")
-python scripts/hello_world.py
+# Verify installation
+python scripts/hello_world.py  # Should print success message
 ```
 
 **Key Dependencies**: `fastf1`, `pandas`, `jsonschema`, `pytest`
 
 ---
 
-## Core Workflows for AI Agents
+## Core Workflows
 
-### Workflow 1: Export and Replay a Race
+### Workflow 1: Export and Replay (CP2 Complete ✅)
 
 ```bash
-# Step 1: Export events
-python scripts/export_events.py \
-    --year 2022 --gp Hungary --session R \
-    --out data/hungary_2022.jsonl
+# Export events
+python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/hungary_2022.jsonl
 
-# Step 2: Replay
-python scripts/replay_cli.py \
-    --events data/hungary_2022.jsonl \
-    --initial-speed 5.0
+# Replay with speed control
+python scripts/replay_cli.py --events data/hungary_2022.jsonl --initial-speed 5.0
 ```
 
-**In REPL**: `play`, `pause`, `speed 20`, `status`, `quit`
+**Replay Commands**: `play`, `pause`, `speed 20`, `status`, `step 10`, `quit`
 
 ### Workflow 2: Programmatic Usage
 
@@ -89,7 +101,7 @@ from src.replay import RaceStateEngine
 
 # Load and normalize
 raw = load_race(2022, "Hungary", "R")
-events = build_events(raw)  # Returns List[dict] with normalized events
+events = build_events(raw)  # Returns List[dict]
 
 # Process events
 engine = RaceStateEngine(events)
@@ -98,17 +110,17 @@ state = engine.apply_next_event()  # Returns RaceState
 
 ---
 
-## Event Schema (Critical for AI Agents)
+## Event Schema (Critical Reference)
 
 **Location**: `schemas/event_schema.json`
 
 **Event Structure**:
 ```python
 {
-    "seq": int,                    # Monotonic sequence (0, 1, 2, ...)
+    "seq": int,                    # Monotonic: 0, 1, 2, ...
     "event_time": float,           # Seconds since race start
     "event_type": str,             # "lap_complete" | "pit_stop" | "track_status"
-    "driver": str | None,          # Driver code (e.g., "VER") or null
+    "driver": str | None,          # "VER" or null
     "lap": int | None,             # Lap number or null
     "payload": dict                # Event-specific fields
 }
@@ -125,47 +137,47 @@ state = engine.apply_next_event()  # Returns RaceState
    - `stint`, `compound_after`
 
 3. **track_status** payload:
-   - `status` (e.g., "GREEN", "YELLOW", "VSC", "SC")
-   - `source` ("fastf1_track_status")
+   - `status`: "GREEN" | "YELLOW" | "VSC" | "SC"
+   - `source`: "fastf1_track_status"
 
-**Validation**: Use `jsonschema.validate(instance=event, schema=schema)`
+**Validation**: Always use `jsonschema.validate(instance=event, schema=schema)`
 
 ---
 
-## Key APIs for AI Agents
+## Key APIs
 
 ### `load_race(year: int, gp: str, session_type: str = "R") -> dict`
 
-Loads race data from FastF1. Creates cache automatically.
+Loads race data from FastF1. Auto-creates cache.
 
 **Returns**: `{"session": FastF1Session, "laps": DataFrame, "timing_data": ...}`  
 **Raises**: `ValueError` if race not found or year < 2018
 
 ### `build_events(raw_data: dict) -> List[dict]`
 
-Normalizes FastF1 data to canonical events.
+Normalizes FastF1 data to canonical events. Sorts by time, assigns `seq`.
 
-**Returns**: Sorted list of event dicts (by time, then type priority, driver, lap)  
-**Side Effect**: Assigns monotonic `seq` numbers (0, 1, 2, ...)
+**Returns**: Sorted list of event dicts
 
 ### `RaceStateEngine(events: List[dict], snapshot_interval_events: int = 50)`
 
-Deterministic state engine. **Key methods**:
-- `apply_next_event() -> RaceState | None` - Apply next event
-- `get_state() -> RaceState` - Get current state (read-only copy)
-- `jump_to_time(time_s: float) -> RaceState` - Seek to absolute time
+Deterministic state engine.
+
+**Methods**:
+- `apply_next_event() -> RaceState | None`
+- `get_state() -> RaceState` (read-only copy)
+- `jump_to_time(time_s: float) -> RaceState`
 
 ### `ReplayController(events: List[dict], initial_speed: float = 1.0)`
 
-Replay with speed control. **Key methods**:
-- `play()` - Start/resume (runs in background thread)
-- `pause()` - Pause playback
-- `set_speed(speed: float)` - Change speed multiplier
-- `step(n: int = 1)` - Step through n events
+Replay with speed control.
+
+**Methods**:
+- `play()`, `pause()`, `set_speed(speed)`, `step(n=1)`, `stop()`
 
 ---
 
-## Testing Commands
+## Testing
 
 ```bash
 # Schema validation
@@ -177,7 +189,7 @@ python tests/test_race_state_engine.py
 # Time utilities
 python -m pytest tests/test_time_utils.py -v
 
-# CP2 completion check
+# CP2 completion
 python tests/test_cp2_completion.py
 ```
 
@@ -185,63 +197,55 @@ python tests/test_cp2_completion.py
 
 ---
 
-## Important Implementation Details for AI Agents
+## Implementation Guidelines
 
-### Determinism
-- **Same events → same state**: RaceStateEngine is fully deterministic
+### Determinism Requirements
+- **Same events → same state**: RaceStateEngine must be fully deterministic
 - **Event ordering**: Sorted by `(event_time, type_priority, driver, lap)`
 - **Sequence numbers**: Assigned after sorting (0, 1, 2, ...)
+- **No randomness**: Never use random values in state computation
 
 ### Missing Data Handling
-- **Sector times**: May be `None` on lap 1 (expected). Use `src.utils.time_utils.extract_sector_times()` for safe handling
-- **Pit durations**: Now properly extracted (was fixed in recent commit)
+- **Sector times**: May be `None` on lap 1 (expected). Use `src.utils.time_utils.extract_sector_times()`
+- **Pit durations**: Properly extracted (fixed in recent commit)
 - **Track status**: Extracted from `session.track_status` DataFrame
 
 ### State Immutability
 - `RaceStateEngine.get_state()` returns **deep copy** - safe to modify
-- Engine internal state is never mutated by external code
+- Engine internal state never mutated by external code
 
 ### Thread Safety
 - `ReplayController` uses locks for thread-safe playback
 - Background thread handles timing; main thread handles commands
 
-### Caching
-- FastF1 cache in `cache/` directory (auto-created)
-- First run downloads data; subsequent runs use cache (offline-capable)
-
 ---
 
-## Common Tasks for AI Agents
+## Common Tasks
 
-### Task: Add a New Feature
+### Task: Add New Event Type
 
-1. **Understand the schema**: Read `schemas/event_schema.json`
-2. **Check existing patterns**: Look at `src/ingest/event_builder.py` for extraction patterns
-3. **Update schema if needed**: Add fields to `event_schema.json`
-4. **Update builder**: Modify `_build_*_events()` functions
-5. **Update state engine**: Modify `_apply_*()` in `src/replay/engine.py` if needed
-6. **Add tests**: Create test in `tests/`
-7. **Validate**: Run `python tests/test_event_schema_examples.py`
+1. Update `schemas/event_schema.json` - add to `oneOf` in payload
+2. Update `src/ingest/event_builder.py` - add `_build_*_events()` function
+3. Update `src/replay/engine.py` - add `_apply_*()` method
+4. Add example in `schemas/examples/`
+5. Update tests
+6. Validate: `python tests/test_event_schema_examples.py`
 
 ### Task: Debug Event Processing
 
 ```python
 from src.ingest import load_race, build_events
+from collections import Counter
 
 raw = load_race(2022, "Hungary", "R")
 events = build_events(raw)
 
-# Inspect events
 print(f"Total: {len(events)}")
 print(f"Types: {Counter(e['event_type'] for e in events)}")
-
-# Check specific event
-event = events[100]
-print(f"Event 100: {event['event_type']} at {event['event_time']:.1f}s")
-print(f"Payload: {event['payload']}")
+print(f"Event 100: {events[100]}")
 ```
 
-### Task: Validate Event Schema
+### Task: Validate Schema
 
 ```python
 import json
@@ -249,94 +253,129 @@ import jsonschema
 
 schema = json.load(open('schemas/event_schema.json'))
 event = json.load(open('schemas/examples/lap_complete.json'))
-
-jsonschema.validate(instance=event, schema=schema)  # Raises if invalid
+jsonschema.validate(instance=event, schema=schema)
 ```
 
 ---
 
-## Troubleshooting for AI Agents
+## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| `ModuleNotFoundError: fastf1` | Run `pip install -r requirements.txt` |
-| `Cache directory does not exist` | Auto-created, but can `mkdir -p cache` |
-| `Failed to load race data` | Check year >= 2018, verify GP name spelling, ensure internet for first download |
-| `No events loaded` | Verify export script ran successfully, check JSONL file exists |
-| Tests skip with "cache not warm" | Run export script once to warm cache |
+| `ModuleNotFoundError: fastf1` | `pip install -r requirements.txt` |
+| `Cache directory does not exist` | Auto-created, or `mkdir -p cache` |
+| `Failed to load race data` | Check year >= 2018, verify GP name, ensure internet |
+| `No events loaded` | Verify export script ran, check JSONL exists |
+| Tests skip "cache not warm" | Run export once to warm cache |
 
 ---
 
-## File Quick Reference
+## File Locations
 
-| What You Need | File Location |
-|---------------|---------------|
-| Load FastF1 data | `src/ingest/fastf1_loader.py` → `load_race()` |
-| Build events | `src/ingest/event_builder.py` → `build_events()` |
-| Replay engine | `src/replay/engine.py` → `RaceStateEngine` |
-| Speed control | `src/replay/controller.py` → `ReplayController` |
+| Component | File |
+|-----------|------|
+| FastF1 loader | `src/ingest/fastf1_loader.py` |
+| Event builder | `src/ingest/event_builder.py` |
+| Replay engine | `src/replay/engine.py` |
+| Replay controller | `src/replay/controller.py` |
+| State definitions | `src/replay/state.py` |
 | Event schema | `schemas/event_schema.json` |
-| Export CLI | `scripts/export_events.py` |
+| Export script | `scripts/export_events.py` |
 | Replay CLI | `scripts/replay_cli.py` |
 | Time utilities | `src/utils/time_utils.py` |
 
 ---
 
-## Success Criteria (CP2)
+## Checkpoint Status
 
-CP2 is complete when:
-- ✅ Can export events from historical race (2018+)
-- ✅ Can replay with configurable speed (1x, 5x, 20x tested)
-- ✅ Events deterministically sorted and sequenced
-- ✅ State engine maintains correct driver state
-- ✅ All tests pass
+### ✅ CP1: Project Proposal + Repo Setup (Complete)
+- GitHub repo with file layout
+- Architecture documentation
+- Event schema definition
+- Milestone plan
 
-**Verification**: Run `python tests/test_cp2_completion.py`
+### ✅ CP2: Ingestion + Replay Engine (Complete)
+- FastF1 loader + event normalization
+- Replay engine with speed control
+- CLI runner
+- **Success**: Replay of one race working with speed control ✅
+
+### ⏳ CP3: Race State Engine (TODO)
+**Goal**: Enhanced state updates + snapshotting + validation  
+**Success Criteria**: Same race run twice produces identical final state
+
+**Tasks**:
+- Implement state updates for all drivers (mostly done, may need enhancements)
+- Implement snapshotting + validation scripts
+- Add deterministic replay validation
+
+### ⏳ CP4: Strategy Decision Engine (TODO)
+**Goal**: Generate strategy recommendations during replay  
+**Success Criteria**: Strategy outputs produced during replay
+
+**Tasks**:
+- Pit window recommendation logic
+- Undercut/overcut evaluation model
+- Safety car strategy trigger
+- Time-bounded simulation (Monte Carlo or heuristic)
+
+### ⏳ CP5: Reliability + Metrics + Demo (TODO)
+**Goal**: Full race demo with recovery + performance results  
+**Success Criteria**: Full race demo + recovery + performance results
+
+**Tasks**:
+- Checkpointing/recovery + fault injection
+- Latency and throughput instrumentation
+- Performance report (p50/p95 metrics)
+- Demo polish
 
 ---
 
-## How to Help the User (For AI Agents)
+## When User Asks for Help
 
-When the user asks for help:
-
-1. **Check current state**: Run tests to see what's working
-2. **Understand the schema**: Always validate against `schemas/event_schema.json`
-3. **Maintain determinism**: Never introduce randomness or non-deterministic behavior
-4. **Handle missing data**: Use `src.utils.time_utils` for None-safe operations
-5. **Test changes**: Run test suite after modifications
-6. **Follow patterns**: Look at existing code in `src/ingest/` and `src/replay/` for patterns
-
-**Common User Requests**:
-- "Add new event type" → Update schema, builder, state engine, tests
-- "Fix data extraction" → Check `event_builder.py`, verify FastF1 data availability
-- "Improve replay" → Modify `controller.py` or `engine.py`
-- "Add feature" → Follow existing patterns, maintain determinism, add tests
-
----
-
-## Quick Start for New AI Sessions
-
-**If user says "help me with RaceControl"**:
-
+### If user says "help me with RaceControl":
 1. Read this file to understand project structure
 2. Check `schemas/event_schema.json` for event format
 3. Run `python tests/test_event_schema_examples.py` to verify setup
-4. Ask user what they want to do (add feature, fix bug, etc.)
+4. Ask what they want to do (add feature, fix bug, work on CP3/4/5)
 
-**If user says "implement X"**:
-
+### If user says "implement X":
 1. Understand X in context of existing codebase
 2. Check if schema needs updates
 3. Follow patterns in `src/ingest/` or `src/replay/`
 4. Maintain determinism and test coverage
 5. Update tests if needed
 
+### If user says "help me with CP3/CP4/CP5":
+1. Review checkpoint requirements above
+2. Check what's already implemented
+3. Plan implementation following existing patterns
+4. Maintain backward compatibility
+5. Add tests for new features
+
 ---
 
-## Notes
+## Important Notes
 
-- **Python version**: 3.8+ (tested with 3.13)
-- **Cache location**: `cache/` (gitignored, auto-created)
-- **Data location**: `data/*.jsonl` (gitignored)
+- **Python**: 3.8+ (tested with 3.13)
+- **Cache**: `cache/` (gitignored, auto-created)
+- **Data**: `data/*.jsonl` (gitignored)
 - **Determinism is critical**: Same events must produce same state
 - **Schema is authoritative**: Always validate against `schemas/event_schema.json`
+- **CP2 is complete**: Ingestion and replay work. Focus on CP3/4/5 going forward.
+
+---
+
+## Additional Context
+
+**Project Proposal Summary**:
+- Focus: Real-time F1 strategy with deterministic decision system
+- Goal: Replay past races and generate strategy recommendations
+- Key Features: Event ingestion, deterministic state, strategy engine, fault tolerance, performance metrics
+- Team: 2 members (Member A: ingestion/normalization, Member B: replay engine)
+- Timeline: 5 checkpoints over semester
+
+**Architecture**: See `docs/architecture.md`  
+**Data Sources**: See `docs/data_sources.md`  
+**Milestone Plan**: See `docs/milestone_plan.md`  
+**User Docs**: See `README.md`
