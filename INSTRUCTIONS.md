@@ -300,14 +300,14 @@ jsonschema.validate(instance=event, schema=schema)
 - CLI runner
 - **Success**: Replay of one race working with speed control ✅
 
-### ⏳ CP3: Race State Engine (TODO)
+### ⏳ CP3: Race State Engine (In Progress)
 **Goal**: Enhanced state updates + snapshotting + validation  
 **Success Criteria**: Same race run twice produces identical final state
 
 **Tasks**:
-- Implement state updates for all drivers (mostly done, may need enhancements)
+- Implement state updates for all drivers ✅ (lap_complete: lap, position, compound, stint, tire_age_laps, tyre_life, last_lap_time_s, last_lap_complete_time_s, gap_to_leader; pit_stop: total_pit_stops, stint, compound_after, tire_age_laps reset; track_status: global)
 - Implement snapshotting + validation scripts
-- Add deterministic replay validation
+- Add deterministic replay validation ✅ (`test_same_final_state_after_two_full_runs`, `test_full_replay_versus_jump_to_end`)
 
 ### ⏳ CP4: Strategy Decision Engine (TODO)
 **Goal**: Generate strategy recommendations during replay  

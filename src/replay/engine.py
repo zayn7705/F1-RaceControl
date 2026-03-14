@@ -236,6 +236,10 @@ class RaceStateEngine:
         if tire_age is not None:
             driver.tire_age_laps = tire_age
 
+        tyre_life = payload.get("tyre_life")
+        if tyre_life is not None:
+            driver.tyre_life = float(tyre_life)
+
         # Timing
         event_time = event.get("event_time")
         if event_time is not None:
@@ -271,6 +275,10 @@ class RaceStateEngine:
         compound_after = payload.get("compound_after")
         if compound_after is not None:
             driver.compound = compound_after
+
+        # New stint: reset tire age until next lap_complete (which will set it from payload)
+        if stint is not None:
+            driver.tire_age_laps = 0
 
         # Pit events do not directly change lap or position here; those are
         # updated on subsequent lap_complete events.

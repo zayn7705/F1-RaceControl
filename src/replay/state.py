@@ -23,6 +23,7 @@ class DriverState:
     compound: Optional[str] = None
     stint: Optional[int] = None
     tire_age_laps: Optional[int] = None
+    tyre_life: Optional[float] = None  # Official F1 tyre life from timing (if available)
 
     # Timing
     last_lap_time_s: Optional[float] = None

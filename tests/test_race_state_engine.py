@@ -115,6 +115,67 @@ def test_engine_snapshot_jump_equivalence():
         assert d1.__dict__ == d2.__dict__
 
 
+def _assert_race_state_equal(state1, state2, msg: str = ""):
+    """Assert two RaceState instances are identical (for determinism checks)."""
+    prefix = f"{msg}: " if msg else ""
+    assert state1.current_event_index == state2.current_event_index, (
+        f"{prefix}current_event_index {state1.current_event_index} != {state2.current_event_index}"
+    )
+    assert state1.current_time_s == state2.current_time_s, (
+        f"{prefix}current_time_s {state1.current_time_s} != {state2.current_time_s}"
+    )
+    assert state1.track_status == state2.track_status, (
+        f"{prefix}track_status {state1.track_status} != {state2.track_status}"
+    )
+    assert state1.total_events == state2.total_events, (
+        f"{prefix}total_events {state1.total_events} != {state2.total_events}"
+    )
+    assert state1.drivers.keys() == state2.drivers.keys(), (
+        f"{prefix}driver set {set(state1.drivers.keys())} != {set(state2.drivers.keys())}"
+    )
+    for code in state1.drivers.keys():
+        d1, d2 = state1.drivers[code], state2.drivers[code]
+        assert d1.__dict__ == d2.__dict__, (
+            f"{prefix}driver {code} state differs: {d1.__dict__} vs {d2.__dict__}"
+        )
+
+
+def test_same_final_state_after_two_full_runs():
+    """CP3: Running the simulation twice must yield identical final state for all drivers."""
+    events = _make_synthetic_events()
+
+    engine1 = RaceStateEngine(events, snapshot_interval_events=2)
+    while engine1.apply_next_event() is not None:
+        pass
+    final1 = engine1.get_state()
+
+    engine2 = RaceStateEngine(events, snapshot_interval_events=2)
+    while engine2.apply_next_event() is not None:
+        pass
+    final2 = engine2.get_state()
+
+    _assert_race_state_equal(final1, final2, "two full runs")
+    assert final1.current_event_index == len(events) - 1
+    assert "AAA" in final1.drivers and "BBB" in final1.drivers
+
+
+def test_full_replay_versus_jump_to_end():
+    """CP3: Sequential replay to end vs jump_to_event(last) must produce identical state."""
+    events = _make_synthetic_events()
+    last_index = len(events) - 1
+
+    engine_seq = RaceStateEngine(events, snapshot_interval_events=2)
+    while engine_seq.apply_next_event() is not None:
+        pass
+    seq_final = engine_seq.get_state()
+
+    engine_jump = RaceStateEngine(events, snapshot_interval_events=2)
+    engine_jump.jump_to_event(last_index)
+    jump_final = engine_jump.get_state()
+
+    _assert_race_state_equal(seq_final, jump_final, "sequential vs jump_to_end")
+
+
 def test_replay_controller_basic_commands():
     # Use a dummy printer to capture status output
     outputs = []
