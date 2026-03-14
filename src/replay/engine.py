@@ -299,17 +299,21 @@ class RaceStateEngine:
             if d.lap > 0 and d.last_lap_complete_time_s is not None:
                 by_lap.setdefault(d.lap, []).append(d)
 
-        # For each lap, compute gaps relative to the leader on that lap
-        for lap, drivers in by_lap.items():
+        # For each lap, compute gaps relative to the leader on that lap.
+        # Iterate in sorted lap order for deterministic results.
+        for lap, drivers in sorted(by_lap.items()):
             if not drivers:
                 continue
 
-            # Prefer leader with position == 1; fall back to earliest time
+            # Prefer leader with position == 1; break ties by time then driver_code for determinism
             leader_candidates = [d for d in drivers if d.position == 1]
             if leader_candidates:
-                leader = leader_candidates[0]
+                leader = min(
+                    leader_candidates,
+                    key=lambda d: (d.last_lap_complete_time_s or 0.0, d.driver_code),
+                )
             else:
-                leader = min(drivers, key=lambda d: d.last_lap_complete_time_s or 0.0)
+                leader = min(drivers, key=lambda d: (d.last_lap_complete_time_s or 0.0, d.driver_code))
 
             leader_time = leader.last_lap_complete_time_s or 0.0
             leader.gap_to_leader_s = 0.0
