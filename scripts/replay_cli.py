@@ -17,6 +17,18 @@ from typing import Dict, List
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from replay.controller import ReplayController  # type: ignore  # noqa: E402
+from replay.snapshot_io import save_snapshot  # type: ignore  # noqa: E402
+
+
+def _derive_race_id(events_path: str) -> str:
+    """Derive race_id from events filename stem."""
+    stem = Path(events_path).stem
+    for prefix in ("sample_events_", "events_", "sample_"):
+        if stem.startswith(prefix):
+            stem = stem[len(prefix) :]
+            break
+    stem = stem.replace(" ", "_").lower()
+    return stem if stem else "unknown_race"
 
 
 def load_events_from_jsonl(path: str) -> List[Dict]:
@@ -53,13 +65,14 @@ Available commands:
   ff <seconds>             Fast-forward by given race time in seconds
   jump_time <seconds>      Jump to an absolute race time (seconds)
   speed <multiplier>       Set playback speed (e.g., 2.0 for 2x)
+  snapshot [seconds]       Capture state and save to snapshots/{race_id}/
   status                   Print current race state summary
   quit                     Exit the program
 """
     )
 
 
-def repl(controller: ReplayController) -> None:
+def repl(controller: ReplayController, race_id: str, snapshots_dir: Path) -> None:
     """Simple command-line REPL for controlling replay."""
     print_help()
     controller.print_status()
@@ -122,6 +135,13 @@ def repl(controller: ReplayController) -> None:
                 print(f"Playback speed set to {speed}x")
             elif cmd == "status":
                 controller.print_status()
+            elif cmd == "snapshot":
+                if args:
+                    t = float(args[0])
+                    controller.jump_time(t)
+                state = controller.engine.get_state()
+                path = save_snapshot(state, race_id, snapshots_dir)
+                print(f"Snapshot saved to {path}")
             else:
                 print(f"Unknown command: {cmd}. Type 'help' for a list of commands.")
         except ValueError as e:
@@ -133,6 +153,12 @@ def repl(controller: ReplayController) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Deterministic F1 race replay CLI")
     parser.add_argument("--events", type=str, required=True, help="Path to JSONL events file")
+    parser.add_argument(
+        "--race-id",
+        type=str,
+        default=None,
+        help="Race identifier for snapshot subfolder (default: derived from events filename)",
+    )
     parser.add_argument(
         "--snapshot-interval",
         type=int,
@@ -153,6 +179,9 @@ def main() -> None:
         print("No events loaded; exiting.")
         sys.exit(1)
 
+    race_id = args.race_id if args.race_id else _derive_race_id(args.events)
+    snapshots_dir = Path(__file__).parent.parent / "snapshots"
+
     controller = ReplayController(
         events,
         snapshot_interval_events=args.snapshot_interval,
@@ -160,7 +189,7 @@ def main() -> None:
     )
 
     try:
-        repl(controller)
+        repl(controller, race_id, snapshots_dir)
     finally:
         controller.stop()
 

@@ -1,0 +1,25 @@
+{
+  "race_id": "hungary_2022",
+  "event_index": 10,
+  "event_time_s": 500.5,
+  "state": {
+    "current_event_index": 10,
+    "current_time_s": 500.5,
+    "track_status": null,
+    "total_events": 100,
+    "drivers": {
+      "VER": {
+        "driver_code": "VER",
+        "lap": 5,
+        "position": 1,
+        "compound": "SOFT",
+        "stint": null,
+        "tire_age_laps": null,
+        "last_lap_time_s": null,
+        "last_lap_complete_time_s": null,
+        "gap_to_leader_s": null,
+        "total_pit_stops": 0
+      }
+    }
+  }
+}

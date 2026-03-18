@@ -1,0 +1,12 @@
+{
+  "race_id": "hungary_2022",
+  "event_index": 2,
+  "event_time_s": 3767.449,
+  "state": {
+    "current_event_index": 2,
+    "current_time_s": 3767.449,
+    "track_status": "YELLOW",
+    "drivers": {},
+    "total_events": 1444
+  }
+}
