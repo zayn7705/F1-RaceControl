@@ -1,0 +1,37 @@
+{
+  "race_id": "monaco_2023",
+  "event_index": 1,
+  "event_time_s": 5.0,
+  "state": {
+    "current_event_index": 1,
+    "current_time_s": 5.0,
+    "track_status": null,
+    "drivers": {
+      "VER": {
+        "driver_code": "VER",
+        "lap": 1,
+        "position": 1,
+        "compound": "SOFT",
+        "stint": 1,
+        "tire_age_laps": 1,
+        "last_lap_time_s": 90.0,
+        "last_lap_complete_time_s": 0.0,
+        "gap_to_leader_s": 0.0,
+        "total_pit_stops": 0
+      },
+      "HAM": {
+        "driver_code": "HAM",
+        "lap": 1,
+        "position": 2,
+        "compound": "MEDIUM",
+        "stint": 1,
+        "tire_age_laps": 1,
+        "last_lap_time_s": 91.0,
+        "last_lap_complete_time_s": 5.0,
+        "gap_to_leader_s": 5.0,
+        "total_pit_stops": 0
+      }
+    },
+    "total_events": 2
+  }
+}

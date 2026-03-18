@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Dict, Optional
 
 
@@ -72,4 +72,9 @@ class RaceSnapshot:
     event_index: int
     time_s: float
     state: RaceState
+
+
+def state_to_dict(state: RaceState) -> dict:
+    """Convert RaceState to JSON-serializable dict."""
+    return asdict(state)
 
