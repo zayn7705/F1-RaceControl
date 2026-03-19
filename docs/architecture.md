@@ -37,11 +37,11 @@ RaceControl is designed as a modular, real-time system with clear separation of 
 **Responsibilities**:
 - Update driver positions, gaps, tire compounds, tire age, lap times
 - Track race control events (safety car, flags)
-- Generate periodic state snapshots (checkpoints)
+- Generate periodic in-memory state snapshots for deterministic seek/restore within a run
 - Ensure deterministic state evolution (same events → same state)
-- Support state restoration from checkpoints
+- Support state restoration (via snapshots for deterministic seeking)
 
-**Output**: Current race state snapshot, checkpoint files
+**Output**: Current race state snapshot (and user-triggered disk snapshots)
 
 ### 4. Strategy Decision Engine
 
@@ -58,8 +58,8 @@ RaceControl is designed as a modular, real-time system with clear separation of 
 
 ## Reliability Features
 
-- **Checkpointing**: Periodic state snapshots to disk
-- **Crash Recovery**: Restore from checkpoint + replay remaining events
+- **Checkpointing**: User-triggered disk snapshots persisted under `snapshots/{race_id}/`
+- **Crash Recovery**: Restore from disk snapshot + replay remaining events (planned)
 - **Event Reordering**: Buffer to handle out-of-order events
 - **Heartbeat Monitoring**: Health checks across modules (if multi-process)
 
