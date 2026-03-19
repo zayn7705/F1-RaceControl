@@ -96,6 +96,7 @@ python scripts/replay_cli.py --events data/sample_events_hungary_2022.jsonl
 
 **Arguments:**
 - `--events`: Path to the JSONL file exported by `scripts/export_events.py`
+- `--race-id`: Optional identifier used for snapshot output folder (default: derived from the events filename)
 - `--snapshot-interval`: Number of events between internal state snapshots (default: 50)
 - `--initial-speed`: Initial playback speed multiplier (default: 1.0)
 
@@ -109,6 +110,7 @@ This starts a simple CLI REPL with commands:
 - `jump_time <seconds>`: Jump to an absolute race time (seconds since lights out)
 - `speed <multiplier>`: Change playback speed (e.g., `2.0` for 2×, `0.5` for half-speed)
 - `status`: Print the current race state summary
+- `snapshot [seconds]`: Save the current race state to `snapshots/{race_id}/` (optionally jump to `<seconds>` first)
 - `quit`: Exit the program
 
 During continuous playback (`play`):
@@ -126,7 +128,8 @@ Internally, the replay engine (`src/replay/engine.py`) maintains a `RaceState` w
 
 - Per-driver state (`DriverState`): lap, position, compound, stint, tire age, last lap time, gap to leader, pit-stop count
 - Global state: current event index, race-relative time, track status
-- Periodic snapshots for efficient, deterministic rewind/fast-forward and time jumps
+- In-memory snapshots for efficient, deterministic rewind/fast-forward and time jumps
+- User-triggered disk snapshots via the `snapshot` CLI command (saved under `snapshots/{race_id}/`)
 
 Given the same JSONL event log, the replay engine guarantees deterministic state evolution and identical CLI output for the same sequence of user commands.
 

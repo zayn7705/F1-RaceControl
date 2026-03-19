@@ -7,20 +7,23 @@ You are an AI assistant helping with the **RaceControl** project: a Real-Time Fo
 **Project Goal**: Build a software system that replays past F1 races as real-time event streams and generates strategy recommendations in real time.
 
 **Project Status**:
+
 - ✅ **Checkpoint 1 (CP1)**: Complete - Project proposal, repo setup, architecture design
 - ✅ **Checkpoint 2 (CP2)**: Complete - Ingestion + Replay Engine working
-- ⏳ **Checkpoint 3 (CP3)**: TODO - Race State Engine enhancements
+- ⏳ **Checkpoint 3 (CP3)**: In progress - Race State Engine snapshotting/checkpoints (CLI) and validation
 - ⏳ **Checkpoint 4 (CP4)**: TODO - Strategy Decision Engine
 - ⏳ **Checkpoint 5 (CP5)**: TODO - Reliability, Metrics, Demo
 
 **Current Capabilities**:
+
 - Load historical F1 race data from FastF1 (2018+)
 - Normalize events into canonical JSONL format
 - Replay races with configurable speed control (1x, 5x, 20x)
 - Maintain deterministic race state (positions, gaps, tires, lap times)
+- Capture and save race state snapshots to disk via the `snapshot` CLI command
 
 **Next Milestones**:
-- CP3: Enhanced state engine with snapshotting and validation
+
 - CP4: Strategy engine (pit windows, undercut/overcut, safety car triggers)
 - CP5: Fault tolerance, performance metrics, demo interface
 
@@ -92,6 +95,7 @@ python scripts/replay_cli.py --events data/hungary_2022.jsonl --initial-speed 5.
 ```
 
 **Replay Commands**: `play`, `pause`, `speed 20`, `status`, `step 10`, `quit`
+**Snapshot Command**: `snapshot` or `snapshot <seconds>` to persist state under `snapshots/{race_id}/`
 
 ### Workflow 2: Programmatic Usage
 
@@ -115,6 +119,7 @@ state = engine.apply_next_event()  # Returns RaceState
 **Location**: `schemas/event_schema.json`
 
 **Event Structure**:
+
 ```python
 {
     "seq": int,                    # Monotonic: 0, 1, 2, ...
@@ -129,16 +134,14 @@ state = engine.apply_next_event()  # Returns RaceState
 **Event Types**:
 
 1. **lap_complete** payload:
-   - `lap_time_s`, `sector1_time_s`, `sector2_time_s`, `sector3_time_s`
-   - `compound`, `stint`, `tire_age_laps`, `tyre_life`, `position`
-
+  - `lap_time_s`, `sector1_time_s`, `sector2_time_s`, `sector3_time_s`
+  - `compound`, `stint`, `tire_age_laps`, `tyre_life`, `position`
 2. **pit_stop** payload:
-   - `pit_in_time_s`, `pit_out_time_s`, `pit_duration_s`
-   - `stint`, `compound_after`
-
+  - `pit_in_time_s`, `pit_out_time_s`, `pit_duration_s`
+  - `stint`, `compound_after`
 3. **track_status** payload:
-   - `status`: "GREEN" | "YELLOW" | "VSC" | "SC"
-   - `source`: "fastf1_track_status"
+  - `status`: "GREEN" | "YELLOW" | "VSC" | "SC"
+  - `source`: "fastf1_track_status"
 
 **Validation**: Always use `jsonschema.validate(instance=event, schema=schema)`
 
@@ -164,6 +167,7 @@ Normalizes FastF1 data to canonical events. Sorts by time, assigns `seq`.
 Deterministic state engine.
 
 **Methods**:
+
 - `apply_next_event() -> RaceState | None`
 - `get_state() -> RaceState` (read-only copy)
 - `jump_to_time(time_s: float) -> RaceState`
@@ -173,6 +177,7 @@ Deterministic state engine.
 Replay with speed control.
 
 **Methods**:
+
 - `play()`, `pause()`, `set_speed(speed)`, `step(n=1)`, `stop()`
 
 ---
@@ -200,21 +205,25 @@ python tests/test_cp2_completion.py
 ## Implementation Guidelines
 
 ### Determinism Requirements
+
 - **Same events → same state**: RaceStateEngine must be fully deterministic
 - **Event ordering**: Sorted by `(event_time, type_priority, driver, lap)`
 - **Sequence numbers**: Assigned after sorting (0, 1, 2, ...)
 - **No randomness**: Never use random values in state computation
 
 ### Missing Data Handling
+
 - **Sector times**: May be `None` on lap 1 (expected). Use `src.utils.time_utils.extract_sector_times()`
 - **Pit durations**: Properly extracted (fixed in recent commit)
 - **Track status**: Extracted from `session.track_status` DataFrame
 
 ### State Immutability
+
 - `RaceStateEngine.get_state()` returns **deep copy** - safe to modify
 - Engine internal state never mutated by external code
 
 ### Thread Safety
+
 - `ReplayController` uses locks for thread-safe playback
 - Background thread handles timing; main thread handles commands
 
@@ -260,70 +269,82 @@ jsonschema.validate(instance=event, schema=schema)
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| `ModuleNotFoundError: fastf1` | `pip install -r requirements.txt` |
-| `Cache directory does not exist` | Auto-created, or `mkdir -p cache` |
-| `Failed to load race data` | Check year >= 2018, verify GP name, ensure internet |
-| `No events loaded` | Verify export script ran, check JSONL exists |
-| Tests skip "cache not warm" | Run export once to warm cache |
+
+| Problem                          | Solution                                            |
+| -------------------------------- | --------------------------------------------------- |
+| `ModuleNotFoundError: fastf1`    | `pip install -r requirements.txt`                   |
+| `Cache directory does not exist` | Auto-created, or `mkdir -p cache`                   |
+| `Failed to load race data`       | Check year >= 2018, verify GP name, ensure internet |
+| `No events loaded`               | Verify export script ran, check JSONL exists        |
+| Tests skip "cache not warm"      | Run export once to warm cache                       |
+
 
 ---
 
 ## File Locations
 
-| Component | File |
-|-----------|------|
-| FastF1 loader | `src/ingest/fastf1_loader.py` |
-| Event builder | `src/ingest/event_builder.py` |
-| Replay engine | `src/replay/engine.py` |
-| Replay controller | `src/replay/controller.py` |
-| State definitions | `src/replay/state.py` |
-| Event schema | `schemas/event_schema.json` |
-| Export script | `scripts/export_events.py` |
-| Replay CLI | `scripts/replay_cli.py` |
-| Time utilities | `src/utils/time_utils.py` |
+
+| Component         | File                          |
+| ----------------- | ----------------------------- |
+| FastF1 loader     | `src/ingest/fastf1_loader.py` |
+| Event builder     | `src/ingest/event_builder.py` |
+| Replay engine     | `src/replay/engine.py`        |
+| Replay controller | `src/replay/controller.py`    |
+| State definitions | `src/replay/state.py`         |
+| Event schema      | `schemas/event_schema.json`   |
+| Export script     | `scripts/export_events.py`    |
+| Replay CLI        | `scripts/replay_cli.py`       |
+| Time utilities    | `src/utils/time_utils.py`     |
+
 
 ---
 
 ## Checkpoint Status
 
 ### ✅ CP1: Project Proposal + Repo Setup (Complete)
+
 - GitHub repo with file layout
 - Architecture documentation
 - Event schema definition
 - Milestone plan
 
 ### ✅ CP2: Ingestion + Replay Engine (Complete)
+
 - FastF1 loader + event normalization
 - Replay engine with speed control
 - CLI runner
 - **Success**: Replay of one race working with speed control ✅
 
-### ⏳ CP3: Race State Engine (In Progress)
+### ✅ CP3: Race State Engine (Complete)
+
 **Goal**: Enhanced state updates + snapshotting + validation  
 **Success Criteria**: Same race run twice produces identical final state
 
 **Tasks**:
+
 - Implement state updates for all drivers ✅ (lap_complete: lap, position, compound, stint, tire_age_laps, tyre_life, last_lap_time_s, last_lap_complete_time_s, gap_to_leader; pit_stop: total_pit_stops, stint, compound_after, tire_age_laps reset; track_status: global)
-- Implement snapshotting + validation scripts
+- Implement snapshotting + validation scripts ✅ (snapshot_io)
 - Add deterministic replay validation ✅ (`test_same_final_state_after_two_full_runs`, `test_full_replay_versus_jump_to_end`)
 
 ### ⏳ CP4: Strategy Decision Engine (TODO)
+
 **Goal**: Generate strategy recommendations during replay  
 **Success Criteria**: Strategy outputs produced during replay
 
 **Tasks**:
+
 - Pit window recommendation logic
 - Undercut/overcut evaluation model
 - Safety car strategy trigger
 - Time-bounded simulation (Monte Carlo or heuristic)
 
 ### ⏳ CP5: Reliability + Metrics + Demo (TODO)
+
 **Goal**: Full race demo with recovery + performance results  
 **Success Criteria**: Full race demo + recovery + performance results
 
 **Tasks**:
+
 - Checkpointing/recovery + fault injection
 - Latency and throughput instrumentation
 - Performance report (p50/p95 metrics)
@@ -334,12 +355,14 @@ jsonschema.validate(instance=event, schema=schema)
 ## When User Asks for Help
 
 ### If user says "help me with RaceControl":
+
 1. Read this file to understand project structure
 2. Check `schemas/event_schema.json` for event format
 3. Run `python tests/test_event_schema_examples.py` to verify setup
 4. Ask what they want to do (add feature, fix bug, work on CP3/4/5)
 
 ### If user says "implement X":
+
 1. Understand X in context of existing codebase
 2. Check if schema needs updates
 3. Follow patterns in `src/ingest/` or `src/replay/`
@@ -347,6 +370,7 @@ jsonschema.validate(instance=event, schema=schema)
 5. Update tests if needed
 
 ### If user says "help me with CP3/CP4/CP5":
+
 1. Review checkpoint requirements above
 2. Check what's already implemented
 3. Plan implementation following existing patterns
@@ -369,6 +393,7 @@ jsonschema.validate(instance=event, schema=schema)
 ## Additional Context
 
 **Project Proposal Summary**:
+
 - Focus: Real-time F1 strategy with deterministic decision system
 - Goal: Replay past races and generate strategy recommendations
 - Key Features: Event ingestion, deterministic state, strategy engine, fault tolerance, performance metrics
