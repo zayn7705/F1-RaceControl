@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 
 from .engine import RaceStateEngine
 from .formatting import format_full_state
+from .state import RaceState
 
 
 class ReplayController:
@@ -24,6 +25,7 @@ class ReplayController:
         initial_speed: float = 1.0,
         status_printer: Optional[Callable[[str], None]] = None,
         prints_per_lap: int = 3,
+        on_state_update: Optional[Callable[[RaceState], None]] = None,
     ) -> None:
         self.engine = RaceStateEngine(events, snapshot_interval_events=snapshot_interval_events)
         self.playback_speed = max(0.1, initial_speed)
@@ -35,6 +37,7 @@ class ReplayController:
 
         # Allow injection for tests; default to print
         self._status_printer = status_printer or print
+        self._on_state_update = on_state_update
 
         # Limit how often we print during continuous play: up to
         # `prints_per_lap` times per race lap.
@@ -88,6 +91,8 @@ class ReplayController:
             state = self.engine.apply_next_event()
             if state is None:
                 break
+            if self._on_state_update is not None:
+                self._on_state_update(state)
         self.print_status()
 
     def rewind(self, seconds: float) -> None:
@@ -151,6 +156,9 @@ class ReplayController:
                     self._playing = False
                 self._status_printer("Race complete. Exiting.")
                 os._exit(0)
+
+            if self._on_state_update is not None:
+                self._on_state_update(state)
 
             # Always print final state and exit when we reach the last event,
             # regardless of per-lap print throttling.

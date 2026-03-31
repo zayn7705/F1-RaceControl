@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from replay.controller import ReplayController  # type: ignore  # noqa: E402
 from replay.snapshot_io import save_snapshot  # type: ignore  # noqa: E402
+from strategy.engine import StrategyEngine  # type: ignore  # noqa: E402
+from strategy.logger import StrategyJsonlLogger  # type: ignore  # noqa: E402
 
 
 def _derive_race_id(events_path: str) -> str:
@@ -181,11 +183,21 @@ def main() -> None:
 
     race_id = args.race_id if args.race_id else _derive_race_id(args.events)
     snapshots_dir = Path(__file__).parent.parent / "snapshots"
+    data_dir = Path(__file__).parent.parent / "data"
+
+    strategy_engine = StrategyEngine(emit_every_laps=5)
+    strategy_logger = StrategyJsonlLogger(base_dir=data_dir)
+
+    def on_state_update(state):
+        recs = strategy_engine.observe(state, race_id=race_id)
+        if recs:
+            strategy_logger.append(race_id=race_id, recs=recs)
 
     controller = ReplayController(
         events,
         snapshot_interval_events=args.snapshot_interval,
         initial_speed=args.initial_speed,
+        on_state_update=on_state_update,
     )
 
     try:
