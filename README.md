@@ -113,6 +113,41 @@ This starts a simple CLI REPL with commands:
 - `snapshot [seconds]`: Save the current race state to `snapshots/{race_id}/` (optionally jump to `<seconds>` first)
 - `quit`: Exit the program
 
+### Strategy Recommendations (Undercut/Overcut Heuristic)
+
+During replay, RaceControl runs a **bounded-time heuristic strategy model** that emits one recommendation per driver **once every 5 laps**. Recommendations are based on the current race-state snapshot fields:
+
+- `track_status`
+- `compound`, `tire_age_laps`
+- `position`
+- `gap_to_leader_s` and per-driver lap-to-lap `gap_delta_to_leader_s`
+- `total_pit_stops`
+
+Recommendations are written (append-only) to:
+
+- `data/strategy_recs_{race_id}.jsonl`
+
+Each JSONL row has the form:
+
+```json
+{
+  "race_id": "hungary_2022",
+  "time_s": 3940.038,
+  "lap": 35,
+  "driver": "VER",
+  "recommendation": "overcut",
+  "features": {
+    "track_status": "GREEN",
+    "compound": "MEDIUM",
+    "tire_age_laps": 8,
+    "position": 2,
+    "gap_to_leader_s": 5.123,
+    "gap_delta_to_leader_s": -0.350,
+    "total_pit_stops": 1
+  }
+}
+```
+
 During continuous playback (`play`):
 
 - The engine applies **every event in the log** in canonical order and runs until the final event is reached.
