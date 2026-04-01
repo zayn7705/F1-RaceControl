@@ -4,6 +4,9 @@ Export normalized F1 race events to JSONL file
 
 Usage:
     python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/sample_events_hungary_2022.jsonl --max-events 500
+
+Full race export for the interactive strategy MVP (no event cap):
+    python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/hungary_2022_r.jsonl
 """
 
 import argparse

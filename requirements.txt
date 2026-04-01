@@ -10,6 +10,7 @@ jsonschema>=4.17.0
 
 # Utilities
 python-dateutil>=2.8.0
+rich>=13.0.0
 
 # Testing (optional for CP1)
 pytest>=7.4.0

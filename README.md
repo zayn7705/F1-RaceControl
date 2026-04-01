@@ -152,6 +152,16 @@ Each JSONL row has the form:
 
 `pit_window` is `immediate` (pit this stint soon), `opening` (window in the next few laps), or `hold` (extend). `safety_car_trigger` is `none`, `deployment` (SC/VSC just started), `cleared` (back to green/yellow racing), or `active` (caution period ongoing on a periodic tick).
 
+### Strategy + race dashboard (terminal UI)
+
+For a single screen that shows **live race state** (running order, gaps, tires) and the **latest strategy rows** together, use the Rich-based UI (requires `rich` in [`requirements.txt`](requirements.txt)):
+
+```bash
+python scripts/replay_strategy_ui.py --events data/sample_events_hungary_2022.jsonl
+```
+
+Commands: `step [n]`, `play`, `pause`, `speed <multiplier>`, `quit`, `help`. The same JSONL log is still written to `data/strategy_recs_{race_id}.jsonl`. The UI redraws after each command (and on an **empty line** / Enter to refresh while the race is playing). Playback no longer force-exits the process when the race ends so you can read the dashboard and type `quit`.
+
 During continuous playback (`play`):
 
 - The engine applies **every event in the log** in canonical order and runs until the final event is reached.
@@ -172,12 +182,32 @@ Internally, the replay engine (`src/replay/engine.py`) maintains a `RaceState` w
 
 Given the same JSONL event log, the replay engine guarantees deterministic state evolution and identical CLI output for the same sequence of user commands.
 
+### Interactive what-if strategy MVP (Hungary 2022)
+
+Counterfactual lap-by-lap mode: pick a driver, see **model-ranked** dry strategies (scores 0–100 are relative rankings, not probabilities), drive the race with optional pits, then compare your **simulated** total time to a **benchmark** chosen as the fastest among a finite set of candidate strategies under the same simple model. Rivals keep historical lap times; they do not react to your strategy.
+
+**Export full race events** (required once; needs FastF1 cache/network as for other exports):
+
+```bash
+python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/hungary_2022_r.jsonl
+```
+
+**Run the interactive CLI** (defaults to `data/hungary_2022_r.jsonl`):
+
+```bash
+python scripts/strategy_mvp_cli.py
+# Or: python scripts/strategy_mvp_cli.py --events path/to/your.jsonl
+```
+
+Outputs are explicitly labeled *simulated* in the tool. The benchmark is **not** a claim of real-world optimality.
+
 ### Running Tests
 
 ```bash
 # Test schema validation and example events
 python tests/test_event_schema_examples.py
 python tests/test_race_state_engine.py
+python -m pytest tests/test_strategy_engine.py tests/test_strategy_mvp.py -v
 ```
 
 The test suite validates that example events conform to the canonical schema, includes a smoke test for the event building pipeline, and tests the deterministic race state engine (event application, snapshots, and basic CLI controller flows).

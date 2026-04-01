@@ -26,6 +26,7 @@ class ReplayController:
         status_printer: Optional[Callable[[str], None]] = None,
         prints_per_lap: int = 3,
         on_state_update: Optional[Callable[[RaceState], None]] = None,
+        exit_process_on_complete: bool = True,
     ) -> None:
         self.engine = RaceStateEngine(events, snapshot_interval_events=snapshot_interval_events)
         self.playback_speed = max(0.1, initial_speed)
@@ -38,6 +39,7 @@ class ReplayController:
         # Allow injection for tests; default to print
         self._status_printer = status_printer or print
         self._on_state_update = on_state_update
+        self._exit_process_on_complete = exit_process_on_complete
 
         # Limit how often we print during continuous play: up to
         # `prints_per_lap` times per race lap.
@@ -155,7 +157,9 @@ class ReplayController:
                 with self._lock:
                     self._playing = False
                 self._status_printer("Race complete. Exiting.")
-                os._exit(0)
+                if self._exit_process_on_complete:
+                    os._exit(0)
+                return
 
             if self._on_state_update is not None:
                 self._on_state_update(state)
@@ -167,7 +171,9 @@ class ReplayController:
                 with self._lock:
                     self._playing = False
                 self._status_printer("Race complete. Exiting.")
-                os._exit(0)
+                if self._exit_process_on_complete:
+                    os._exit(0)
+                return
 
             # Determine current race lap as the max lap among drivers
             if state.drivers:

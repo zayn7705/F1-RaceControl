@@ -35,6 +35,7 @@
   - Safety car strategy triggers
   - Bounded-time simulation
 - **Success Criteria**: Strategy recommendations generated during replay
+- **Note**: Interactive Hungary 2022 “what-if” MVP CLI (`scripts/strategy_mvp_cli.py`) extends this with a simple counterfactual simulator + benchmark (see README).
 
 ### Checkpoint 5: Reliability + Metrics + Demo
 - **Target Date**: Week 15
