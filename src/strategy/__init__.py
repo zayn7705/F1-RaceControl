@@ -6,7 +6,7 @@ RaceState snapshots.
 """
 
 from .engine import StrategyEngine
-from .types import DriverRecommendation
+from .types import DriverRecommendation, PitWindowLabel, SafetyCarTrigger
 
-__all__ = ["StrategyEngine", "DriverRecommendation"]
+__all__ = ["StrategyEngine", "DriverRecommendation", "PitWindowLabel", "SafetyCarTrigger"]
 

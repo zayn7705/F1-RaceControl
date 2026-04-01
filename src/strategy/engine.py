@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional
 
 from replay.state import RaceState
 
-from .types import DriverRecommendation, RecommendationLabel
+from .types import DriverRecommendation, PitWindowLabel, RecommendationLabel, SafetyCarTrigger
 
 
 class StrategyEngine:
     """
     Deterministic, bounded-time heuristic strategy engine.
 
-    Emits one recommendation per driver every `emit_every_laps` laps.
+    Emits one recommendation per driver every `emit_every_laps` laps, and on
+    safety-car / VSC deployment or end (track-status transitions) so triggers
+    are not missed between periodic ticks.
     """
 
     def __init__(
@@ -29,7 +31,9 @@ class StrategyEngine:
 
         self._last_gap_to_leader: Dict[str, float] = {}
         self._last_lap_seen: Dict[str, int] = {}
-        self._last_emitted_lap: Optional[int] = None
+        self._last_regular_emit_lap: Optional[int] = None
+        self._prev_track_status: Optional[str] = None
+        self._last_transition_emit_event_index: int = -1
 
     def observe(self, state: RaceState, race_id: str) -> Optional[List[DriverRecommendation]]:
         """
@@ -43,19 +47,25 @@ class StrategyEngine:
 
         tick_lap = max(d.lap for d in state.drivers.values())
         if tick_lap <= 0:
+            self._advance_track_memory(state)
             return None
 
-        if tick_lap % self.emit_every_laps != 0:
-            self._update_gap_memory(state)
-            return None
+        transition_kind = self._classify_track_transition(self._prev_track_status, state.track_status)
+        emit_regular = (
+            tick_lap % self.emit_every_laps == 0 and self._last_regular_emit_lap != tick_lap
+        )
+        emit_transition = transition_kind in {"deployment", "cleared"} and (
+            state.current_event_index != self._last_transition_emit_event_index
+        )
 
-        if self._last_emitted_lap == tick_lap:
-            self._update_gap_memory(state)
+        if not emit_regular and not emit_transition:
+            self._advance_track_memory(state)
             return None
 
         recs: List[DriverRecommendation] = []
         track_status = state.track_status
         time_s = float(state.current_time_s)
+        row_trigger = self._row_safety_car_trigger(transition_kind, track_status, emit_transition)
 
         # Deterministic ordering: position then driver_code
         drivers_sorted = sorted(
@@ -76,6 +86,11 @@ class StrategyEngine:
                 gap_delta_to_leader_s=gap_delta,
                 total_pit_stops=d.total_pit_stops,
             )
+            pit_window = self._pit_window(
+                track_status=track_status,
+                compound=d.compound,
+                tire_age_laps=d.tire_age_laps,
+            )
 
             recs.append(
                 DriverRecommendation(
@@ -84,6 +99,8 @@ class StrategyEngine:
                     lap=tick_lap,
                     driver=d.driver_code,
                     recommendation=label,
+                    pit_window=pit_window,
+                    safety_car_trigger=row_trigger,
                     track_status=track_status,
                     compound=d.compound,
                     tire_age_laps=d.tire_age_laps,
@@ -94,8 +111,12 @@ class StrategyEngine:
                 )
             )
 
-        self._last_emitted_lap = tick_lap
-        self._update_gap_memory(state)
+        if emit_regular:
+            self._last_regular_emit_lap = tick_lap
+        if emit_transition:
+            self._last_transition_emit_event_index = state.current_event_index
+
+        self._advance_track_memory(state)
         return recs
 
     @staticmethod
@@ -103,6 +124,8 @@ class StrategyEngine:
         d = asdict(rec)
         # Move feature fields under "features" for the JSONL log format
         features = {
+            "pit_window": d.pop("pit_window"),
+            "safety_car_trigger": d.pop("safety_car_trigger"),
             "track_status": d.pop("track_status"),
             "compound": d.pop("compound"),
             "tire_age_laps": d.pop("tire_age_laps"),
@@ -114,6 +137,10 @@ class StrategyEngine:
         d["features"] = features
         return d
 
+    def _advance_track_memory(self, state: RaceState) -> None:
+        self._update_gap_memory(state)
+        self._prev_track_status = state.track_status
+
     def _update_gap_memory(self, state: RaceState) -> None:
         for d in state.drivers.values():
             if d.lap <= 0:
@@ -122,6 +149,86 @@ class StrategyEngine:
                 continue
             self._last_gap_to_leader[d.driver_code] = float(d.gap_to_leader_s)
             self._last_lap_seen[d.driver_code] = int(d.lap)
+
+    @staticmethod
+    def _is_sc_period(status: Optional[str]) -> bool:
+        if status is None:
+            return False
+        return status.upper() in {"SC", "VSC"}
+
+    @classmethod
+    def _classify_track_transition(
+        cls, prev: Optional[str], curr: Optional[str]
+    ) -> Literal["none", "deployment", "cleared", "active"]:
+        p_sc = cls._is_sc_period(prev)
+        c_sc = cls._is_sc_period(curr)
+        if not p_sc and c_sc:
+            return "deployment"
+        if p_sc and not c_sc:
+            return "cleared"
+        if c_sc:
+            return "active"
+        return "none"
+
+    @classmethod
+    def _row_safety_car_trigger(
+        cls,
+        transition_kind: Literal["none", "deployment", "cleared", "active"],
+        track_status: Optional[str],
+        emit_transition: bool,
+    ) -> SafetyCarTrigger:
+        if emit_transition and transition_kind == "deployment":
+            return "deployment"
+        if emit_transition and transition_kind == "cleared":
+            return "cleared"
+        if cls._is_sc_period(track_status):
+            return "active"
+        return "none"
+
+    def _compound_stint_horizon(self, compound: Optional[str]) -> int:
+        """Deterministic target lap age before pit; derived from max_tire_age_laps."""
+        base = self.max_tire_age_laps
+        if compound is None:
+            return base
+        c = compound.upper()
+        if c == "SOFT":
+            return max(1, base - 3)
+        if c == "MEDIUM":
+            return max(1, base)
+        if c == "HARD":
+            return base + 5
+        return base
+
+    def _pit_window(
+        self,
+        *,
+        track_status: Optional[str],
+        compound: Optional[str],
+        tire_age_laps: Optional[int],
+    ) -> PitWindowLabel:
+        """
+        Pit window heuristic: immediate vs opening vs hold.
+
+        Under SC/VSC, pit loss is compressed — flag a cheap-stop window when tires are
+        no longer brand-new.
+        """
+        if compound is None or tire_age_laps is None:
+            return "hold"
+
+        age = int(tire_age_laps)
+        status = (track_status or "UNKNOWN").upper()
+
+        if status in {"SC", "VSC"}:
+            if age >= 3:
+                return "immediate"
+            return "opening"
+
+        horizon = self._compound_stint_horizon(compound)
+        if age >= horizon:
+            return "immediate"
+        if age >= max(0, horizon - 3):
+            return "opening"
+        return "hold"
 
     def _compute_gap_delta(self, driver: str, lap: int, gap_to_leader_s: Optional[float]) -> Optional[float]:
         if gap_to_leader_s is None:

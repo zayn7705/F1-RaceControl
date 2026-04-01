@@ -11,7 +11,7 @@ You are an AI assistant helping with the **RaceControl** project: a Real-Time Fo
 - ✅ **Checkpoint 1 (CP1)**: Complete - Project proposal, repo setup, architecture design
 - ✅ **Checkpoint 2 (CP2)**: Complete - Ingestion + Replay Engine working
 - ⏳ **Checkpoint 3 (CP3)**: In progress - Race State Engine snapshotting/checkpoints (CLI) and validation
-- ⏳ **Checkpoint 4 (CP4)**: TODO - Strategy Decision Engine
+- ✅ **Checkpoint 4 (CP4)**: Complete - Strategy engine (pit window, undercut/overcut, SC triggers, JSONL during replay)
 - ⏳ **Checkpoint 5 (CP5)**: TODO - Reliability, Metrics, Demo
 
 **Current Capabilities**:
@@ -326,17 +326,17 @@ jsonschema.validate(instance=event, schema=schema)
 - Implement snapshotting + validation scripts ✅ (snapshot_io)
 - Add deterministic replay validation ✅ (`test_same_final_state_after_two_full_runs`, `test_full_replay_versus_jump_to_end`)
 
-### ⏳ CP4: Strategy Decision Engine (TODO)
+### ✅ CP4: Strategy Decision Engine (Complete)
 
 **Goal**: Generate strategy recommendations during replay  
 **Success Criteria**: Strategy outputs produced during replay
 
 **Tasks**:
 
-- Pit window recommendation logic
-- Undercut/overcut evaluation model
-- Safety car strategy trigger
-- Time-bounded simulation (Monte Carlo or heuristic)
+- Pit window recommendation logic (`pit_window`: immediate / opening / hold)
+- Undercut/overcut evaluation model (heuristic scores)
+- Safety car strategy triggers (deployment / cleared / active on periodic ticks; extra emit on SC/VSC transitions)
+- Time-bounded simulation (deterministic heuristic in `src/strategy/engine.py`)
 
 ### ⏳ CP5: Reliability + Metrics + Demo (TODO)
 

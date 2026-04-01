@@ -137,6 +137,8 @@ Each JSONL row has the form:
   "driver": "VER",
   "recommendation": "overcut",
   "features": {
+    "pit_window": "opening",
+    "safety_car_trigger": "none",
     "track_status": "GREEN",
     "compound": "MEDIUM",
     "tire_age_laps": 8,
@@ -147,6 +149,8 @@ Each JSONL row has the form:
   }
 }
 ```
+
+`pit_window` is `immediate` (pit this stint soon), `opening` (window in the next few laps), or `hold` (extend). `safety_car_trigger` is `none`, `deployment` (SC/VSC just started), `cleared` (back to green/yellow racing), or `active` (caution period ongoing on a periodic tick).
 
 During continuous playback (`play`):
 

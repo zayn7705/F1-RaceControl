@@ -28,7 +28,7 @@
 - **Success Criteria**: Same event log produces identical final state
 
 ### Checkpoint 4: Strategy Engine
-- **Target Date**: Week 12
+- **Status**: Complete
 - **Deliverables**:
   - Pit window recommendation logic
   - Undercut/overcut evaluation

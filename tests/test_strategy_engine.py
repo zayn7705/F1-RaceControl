@@ -81,8 +81,61 @@ def test_sc_bias_can_favor_undercut():
     eng = StrategyEngine(emit_every_laps=5, max_tire_age_laps=10)
     s5 = _make_state(5, track_status="SC")
     s5.drivers["BBB"].tire_age_laps = 15
+    s5.current_event_index = 0
     recs = eng.observe(s5, race_id="x")
     assert recs is not None
     bbb = [r for r in recs if r.driver == "BBB"][0]
     assert bbb.recommendation in {"undercut", "other"}
+    assert bbb.pit_window == "immediate"
+    assert bbb.safety_car_trigger in {"active", "deployment"}
+
+
+def test_pit_window_hold_when_tires_fresh():
+    eng = StrategyEngine(emit_every_laps=5, max_tire_age_laps=15)
+    s5 = _make_state(5, track_status="GREEN")
+    s5.drivers["BBB"].compound = "MEDIUM"
+    s5.drivers["BBB"].tire_age_laps = 3
+    s5.current_event_index = 0
+    recs = eng.observe(s5, race_id="x")
+    assert recs is not None
+    bbb = [r for r in recs if r.driver == "BBB"][0]
+    assert bbb.pit_window == "hold"
+
+
+def test_sc_deployment_emits_even_off_periodic_lap():
+    """Track-status transition must emit even when lap % emit_every != 0."""
+    eng = StrategyEngine(emit_every_laps=5, max_tire_age_laps=15)
+    race_id = "t"
+
+    s3 = _make_state(3, track_status="GREEN")
+    s3.current_event_index = 10
+    assert eng.observe(s3, race_id=race_id) is None
+
+    s3_sc = _make_state(3, track_status="SC")
+    s3_sc.current_event_index = 11
+    recs = eng.observe(s3_sc, race_id=race_id)
+    assert recs is not None
+    assert recs[0].safety_car_trigger == "deployment"
+    assert recs[0].pit_window in {"immediate", "opening"}
+
+    # Same event index must not duplicate
+    assert eng.observe(s3_sc, race_id=race_id) is None
+
+
+def test_sc_cleared_emits():
+    eng = StrategyEngine(emit_every_laps=5)
+    race_id = "t"
+    s4_green = _make_state(4, track_status="GREEN")
+    s4_green.current_event_index = 19
+    assert eng.observe(s4_green, race_id=race_id) is None
+
+    s4_sc = _make_state(4, track_status="SC")
+    s4_sc.current_event_index = 20
+    assert eng.observe(s4_sc, race_id=race_id) is not None
+
+    s4_clear = _make_state(4, track_status="GREEN")
+    s4_clear.current_event_index = 21
+    recs = eng.observe(s4_clear, race_id=race_id)
+    assert recs is not None
+    assert recs[0].safety_car_trigger == "cleared"
 
