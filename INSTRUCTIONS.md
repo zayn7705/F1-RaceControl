@@ -10,9 +10,13 @@ You are an AI assistant helping with the **RaceControl** project: a Real-Time Fo
 
 - ✅ **Checkpoint 1 (CP1)**: Complete - Project proposal, repo setup, architecture design
 - ✅ **Checkpoint 2 (CP2)**: Complete - Ingestion + Replay Engine working
-- ⏳ **Checkpoint 3 (CP3)**: In progress - Race State Engine snapshotting/checkpoints (CLI) and validation
-- ⏳ **Checkpoint 4 (CP4)**: TODO - Strategy Decision Engine
+- ✅ **Checkpoint 3 (CP3)**: Complete - Race state engine, snapshots, deterministic validation
+- ✅ **Checkpoint 4 (CP4)**: Complete - Replay-integrated strategy engine (pit window, undercut/overcut, SC triggers, JSONL during replay)
 - ⏳ **Checkpoint 5 (CP5)**: TODO - Reliability, Metrics, Demo
+
+**In progress / exploratory**:
+
+- **Hungary 2022 what-if prototype** (`src/strategy_mvp/`, `scripts/strategy_mvp_cli.py`): counterfactual pit/stint simulator and model benchmark—**scope and UX still evolving** (see README). Not part of the core deterministic replay contract.
 
 **Current Capabilities**:
 
@@ -21,11 +25,12 @@ You are an AI assistant helping with the **RaceControl** project: a Real-Time Fo
 - Replay races with configurable speed control (1x, 5x, 20x)
 - Maintain deterministic race state (positions, gaps, tires, lap times)
 - Capture and save race state snapshots to disk via the `snapshot` CLI command
+- Strategy recommendations during replay + optional **Rich strategy dashboard** (`scripts/replay_strategy_ui.py`)
 
 **Next Milestones**:
 
-- CP4: Strategy engine (pit windows, undercut/overcut, safety car triggers)
 - CP5: Fault tolerance, performance metrics, demo interface
+- Continue exploring the Hungary what-if line (model, commands, honesty of labels)
 
 ---
 
@@ -46,25 +51,34 @@ When helping with this project:
 ```
 src/
 ├── ingest/              # CP2: FastF1 → normalized events ✅
-│   ├── fastf1_loader.py    # load_race(year, gp, session_type)
-│   └── event_builder.py    # build_events(raw_data) → List[events]
-├── replay/              # CP2: Replay engine ✅
-│   ├── engine.py          # RaceStateEngine - deterministic state
-│   ├── controller.py      # ReplayController - speed control
-│   └── state.py           # RaceState, DriverState
+│   ├── fastf1_loader.py
+│   └── event_builder.py
+├── replay/              # CP2+: deterministic state ✅
+│   ├── engine.py
+│   ├── controller.py
+│   └── state.py
+├── strategy/            # CP4: heuristic strategy + JSONL logger ✅
+│   └── engine.py
+├── strategy_mvp/        # Hungary what-if explorer (in progress / exploratory)
+│   └── …
 └── utils/
-    └── time_utils.py      # None-safe sector time utilities
+    └── time_utils.py
 
 scripts/
-├── export_events.py    # Export race to JSONL ✅
-└── replay_cli.py       # Interactive replay CLI ✅
+├── export_events.py
+├── replay_cli.py
+├── replay_strategy_ui.py   # Terminal dashboard: state + strategy (Rich)
+├── strategy_mvp_cli.py     # Hungary counterfactual prototype CLI
+└── hello_world.py
 
 schemas/
-├── event_schema.json   # Canonical event format (JSON Schema)
-└── examples/          # Example events
+├── event_schema.json
+└── examples/
 
-tests/                  # Test suite
+tests/
 ```
+
+See `README.md` for commands and how the what-if prototype differs from replay.
 
 ---
 
@@ -78,7 +92,7 @@ pip install -r requirements.txt
 python scripts/hello_world.py  # Should print success message
 ```
 
-**Key Dependencies**: `fastf1`, `pandas`, `jsonschema`, `pytest`
+**Key Dependencies**: `fastf1`, `pandas`, `jsonschema`, `pytest`, `rich` (for `replay_strategy_ui.py`)
 
 ---
 
@@ -294,6 +308,9 @@ jsonschema.validate(instance=event, schema=schema)
 | Event schema      | `schemas/event_schema.json`   |
 | Export script     | `scripts/export_events.py`    |
 | Replay CLI        | `scripts/replay_cli.py`       |
+| Strategy engine   | `src/strategy/engine.py`      |
+| Strategy UI       | `scripts/replay_strategy_ui.py` |
+| Hungary what-if   | `src/strategy_mvp/`, `scripts/strategy_mvp_cli.py` |
 | Time utilities    | `src/utils/time_utils.py`     |
 
 
@@ -326,17 +343,21 @@ jsonschema.validate(instance=event, schema=schema)
 - Implement snapshotting + validation scripts ✅ (snapshot_io)
 - Add deterministic replay validation ✅ (`test_same_final_state_after_two_full_runs`, `test_full_replay_versus_jump_to_end`)
 
-### ⏳ CP4: Strategy Decision Engine (TODO)
+### ✅ CP4: Strategy Decision Engine (Complete)
 
 **Goal**: Generate strategy recommendations during replay  
 **Success Criteria**: Strategy outputs produced during replay
 
 **Tasks**:
 
-- Pit window recommendation logic
-- Undercut/overcut evaluation model
-- Safety car strategy trigger
-- Time-bounded simulation (Monte Carlo or heuristic)
+- Pit window recommendation logic (`pit_window`: immediate / opening / hold)
+- Undercut/overcut evaluation model (heuristic scores)
+- Safety car strategy triggers (deployment / cleared / active on periodic ticks; extra emit on SC/VSC transitions)
+- Time-bounded simulation (deterministic heuristic in `src/strategy/engine.py`)
+
+**Exploratory (not required for CP4 closure)**:
+
+- **Hungary 2022 what-if** (`src/strategy_mvp/`, `scripts/strategy_mvp_cli.py`): counterfactual simulator + benchmark search—**in progress** for design and teaching; see `README.md` and `docs/milestone_plan.md`.
 
 ### ⏳ CP5: Reliability + Metrics + Demo (TODO)
 
@@ -386,7 +407,7 @@ jsonschema.validate(instance=event, schema=schema)
 - **Data**: `data/*.jsonl` (gitignored)
 - **Determinism is critical**: Same events must produce same state
 - **Schema is authoritative**: Always validate against `schemas/event_schema.json`
-- **CP2 is complete**: Ingestion and replay work. Focus on CP3/4/5 going forward.
+- **CP2–CP4 core is complete**: Ingestion, replay, state, and replay-integrated strategy. **CP5** is next. The **Hungary what-if** prototype is optional exploratory work—see README.
 
 ---
 

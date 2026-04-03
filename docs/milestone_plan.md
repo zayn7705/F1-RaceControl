@@ -1,4 +1,4 @@
-# Checkpoint Plan Plan
+# Checkpoint plan
 
 ### Checkpoint 1: Proposal & Repository Setup
 - **Status**: Complete
@@ -19,7 +19,7 @@
 - **Success Criteria**: Can replay one historical race with configurable speed
 
 ### Checkpoint 3: Race State Engine
-- **Target Date**: Week 10
+- **Status**: Complete
 - **Deliverables**:
   - Driver state tracking (position, gaps, tires, lap times)
   - State update logic
@@ -28,13 +28,16 @@
 - **Success Criteria**: Same event log produces identical final state
 
 ### Checkpoint 4: Strategy Engine
-- **Target Date**: Week 12
+- **Status**: Complete (replay-integrated engine)
 - **Deliverables**:
   - Pit window recommendation logic
   - Undercut/overcut evaluation
   - Safety car strategy triggers
   - Bounded-time simulation
 - **Success Criteria**: Strategy recommendations generated during replay
+
+**Exploratory / in progress (Hungary 2022 what-if)**  
+We are **exploring** an interactive counterfactual mode on top of the same event data: `src/strategy_mvp/` and `scripts/strategy_mvp_cli.py` (simple time model, benchmark among candidate strategies). This is a **prototype** for learning and iteration—physics, UX, and promises are **not** frozen. See `README.md`. It does not change the deterministic replay contract.
 
 ### Checkpoint 5: Reliability + Metrics + Demo
 - **Target Date**: Week 15
