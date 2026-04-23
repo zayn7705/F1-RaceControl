@@ -84,6 +84,30 @@ Options: `--events` (required), `--race-id`, `--snapshot-interval`, `--initial-s
 
 During **`play`**, status prints are **throttled** per lap (readable terminal); the engine still processes **every** event. At the **last event**, the CLI prints final state and exits.
 
+### Run metrics (latency, throughput, reliability)
+
+Both replay entrypoints can optionally record **run metrics** and write a **post-run report JSON** (latency percentiles, throughput, stream/state issue counts, exceptions, replay drift during `play`).
+
+**Replay CLI**
+
+```bash
+python scripts/replay_cli.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json \
+  --check-every 500
+```
+
+- `--metrics-json`: enables telemetry and writes the report JSON to the given path.
+- `--check-every N`: runs state consistency checks every N events (use `0` to only check once at the end).
+
+**Strategy UI**
+
+```bash
+python scripts/replay_strategy_ui.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json
+```
+
 ---
 
 ## Strategy recommendations (replay-integrated)

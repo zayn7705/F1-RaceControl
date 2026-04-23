@@ -8,6 +8,8 @@ from typing import Callable, Dict, List, Optional, Sequence
 from .engine import RaceStateEngine
 from .formatting import format_full_state
 from .state import RaceState
+from .instrumented_engine import InstrumentedRaceStateEngine
+from .run_telemetry import RunTelemetry
 
 
 class ReplayController:
@@ -27,8 +29,15 @@ class ReplayController:
         prints_per_lap: int = 3,
         on_state_update: Optional[Callable[[RaceState], None]] = None,
         exit_process_on_complete: bool = True,
+        telemetry: Optional[RunTelemetry] = None,
     ) -> None:
-        self.engine = RaceStateEngine(events, snapshot_interval_events=snapshot_interval_events)
+        base_engine = RaceStateEngine(events, snapshot_interval_events=snapshot_interval_events)
+        self.telemetry = telemetry
+        if self.telemetry is not None:
+            self.telemetry.start(total_events=len(events))
+            self.engine = InstrumentedRaceStateEngine(base_engine, self.telemetry)
+        else:
+            self.engine = base_engine
         self.playback_speed = max(0.1, initial_speed)
 
         self._playing = False
@@ -80,6 +89,9 @@ class ReplayController:
             self._playing = False
         if self._play_thread is not None:
             self._play_thread.join(timeout=1.0)
+        if self.telemetry is not None:
+            if not self.telemetry.finished:
+                self.telemetry.finish(completed=False)
 
     # ------------------------------------------------------------------
     # Single-step and seeking helpers
@@ -92,9 +104,14 @@ class ReplayController:
         for _ in range(n):
             state = self.engine.apply_next_event()
             if state is None:
+                if self.telemetry is not None:
+                    self.telemetry.finish(completed=True)
                 break
             if self._on_state_update is not None:
+                t0 = time.monotonic()
                 self._on_state_update(state)
+                if self.telemetry is not None:
+                    self.telemetry.record_callback(time.monotonic() - t0)
         self.print_status()
 
     def rewind(self, seconds: float) -> None:
@@ -140,6 +157,8 @@ class ReplayController:
                 # End of stream
                 with self._lock:
                     self._playing = False
+                if self.telemetry is not None and not self.telemetry.finished:
+                    self.telemetry.finish(completed=True)
                 return
 
             current_time = events[idx]["event_time"] if idx >= 0 else events[0]["event_time"]
@@ -149,7 +168,11 @@ class ReplayController:
             # Scale by playback speed; protect against extremely small sleeps
             sleep_duration = delta / speed if speed > 0 else 0.0
             if sleep_duration > 0.0:
-                time.sleep(min(sleep_duration, 1.0))
+                intended = min(sleep_duration, 1.0)
+                t0 = time.monotonic()
+                time.sleep(intended)
+                if self.telemetry is not None:
+                    self.telemetry.record_replay_drift((time.monotonic() - t0) - intended)
 
             state = self.engine.apply_next_event()
             if state is None:
@@ -159,10 +182,15 @@ class ReplayController:
                 self._status_printer("Race complete. Exiting.")
                 if self._exit_process_on_complete:
                     os._exit(0)
+                if self.telemetry is not None:
+                    self.telemetry.finish(completed=True)
                 return
 
             if self._on_state_update is not None:
+                t0 = time.monotonic()
                 self._on_state_update(state)
+                if self.telemetry is not None:
+                    self.telemetry.record_callback(time.monotonic() - t0)
 
             # Always print final state and exit when we reach the last event,
             # regardless of per-lap print throttling.
@@ -173,6 +201,8 @@ class ReplayController:
                 self._status_printer("Race complete. Exiting.")
                 if self._exit_process_on_complete:
                     os._exit(0)
+                if self.telemetry is not None:
+                    self.telemetry.finish(completed=True)
                 return
 
             # Determine current race lap as the max lap among drivers

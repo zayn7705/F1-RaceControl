@@ -22,7 +22,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from replay.controller import ReplayController  # noqa: E402
 from replay.formatting import format_header, running_order  # noqa: E402
+from replay.run_telemetry import RunTelemetry  # noqa: E402
 from replay.state import RaceState  # noqa: E402
+from replay.validation import check_state, validate_event_stream  # noqa: E402
 from strategy.engine import StrategyEngine  # noqa: E402
 from strategy.logger import StrategyJsonlLogger  # noqa: E402
 
@@ -200,6 +202,13 @@ def main() -> None:
     parser.add_argument("--race-id", type=str, default=None)
     parser.add_argument("--snapshot-interval", type=int, default=50)
     parser.add_argument("--initial-speed", type=float, default=20.0)
+    parser.add_argument("--metrics-json", type=str, default=None, help="Write a per-run metrics report JSON to this path")
+    parser.add_argument(
+        "--check-every",
+        type=int,
+        default=0,
+        help="Run state consistency checks every N events (0 = only at end when metrics enabled)",
+    )
     args = parser.parse_args()
 
     events = load_events_from_jsonl(args.events)
@@ -226,11 +235,16 @@ def main() -> None:
             for r in recs:
                 with ui_lock:
                     strat_rows.append(StrategyEngine.to_json_dict(r))
+        if telemetry is not None and args.check_every and state.current_event_index % args.check_every == 0:
+            telemetry.record_state_issues(check_state(state, state.current_event_index))
         with ui_lock:
             shared["state"] = state
             if len(events) > 0 and state.current_event_index >= len(events) - 1:
                 shared["race_complete"] = True
 
+    telemetry = RunTelemetry(race_id=race_id) if args.metrics_json else None
+    if telemetry is not None:
+        telemetry.record_stream_issues(validate_event_stream(events))
     controller = ReplayController(
         events,
         snapshot_interval_events=args.snapshot_interval,
@@ -238,6 +252,7 @@ def main() -> None:
         status_printer=lambda *_: None,
         on_state_update=on_state_update,
         exit_process_on_complete=False,
+        telemetry=telemetry,
     )
 
     with ui_lock:
@@ -291,6 +306,25 @@ def main() -> None:
                 controller.step(n)
     finally:
         controller.stop()
+        if telemetry is not None:
+            if not args.check_every:
+                st = controller.engine.get_state()
+                telemetry.record_state_issues(check_state(st, st.current_event_index))
+            report = telemetry.report()
+            console.print("\n[bold cyan]Run metrics[/]")
+            console.print(
+                f"Completed: {report.completed} | Events: {report.events_applied}/{report.total_events} | "
+                f"Wall: {report.wall_time_s:.3f}s | Throughput: {(report.events_per_s or 0.0):.1f} ev/s"
+            )
+            console.print(
+                "apply_next_event latency (s): "
+                f"p50={report.apply_next_event_latency.p50_s} "
+                f"p90={report.apply_next_event_latency.p90_s} "
+                f"p99={report.apply_next_event_latency.p99_s}"
+            )
+            with open(args.metrics_json, "w", encoding="utf-8") as f:
+                f.write(report.to_json(indent=2))
+            console.print(f"Metrics JSON written to {args.metrics_json}")
 
 
 if __name__ == "__main__":
