@@ -36,15 +36,19 @@ class LatencySummary:
     max_s: Optional[float]
     p50_s: Optional[float]
     p90_s: Optional[float]
+    p95_s: Optional[float]
     p99_s: Optional[float]
 
 
 def summarize_latencies(samples_s: Sequence[float]) -> LatencySummary:
+    empty = LatencySummary(
+        count=0, min_s=None, mean_s=None, max_s=None, p50_s=None, p90_s=None, p95_s=None, p99_s=None
+    )
     if not samples_s:
-        return LatencySummary(count=0, min_s=None, mean_s=None, max_s=None, p50_s=None, p90_s=None, p99_s=None)
+        return empty
     vals = list(float(x) for x in samples_s if x is not None)
     if not vals:
-        return LatencySummary(count=0, min_s=None, mean_s=None, max_s=None, p50_s=None, p90_s=None, p99_s=None)
+        return empty
     vals.sort()
     return LatencySummary(
         count=len(vals),
@@ -53,6 +57,7 @@ def summarize_latencies(samples_s: Sequence[float]) -> LatencySummary:
         max_s=float(vals[-1]),
         p50_s=_safe_quantile(vals, 0.50),
         p90_s=_safe_quantile(vals, 0.90),
+        p95_s=_safe_quantile(vals, 0.95),
         p99_s=_safe_quantile(vals, 0.99),
     )
 
@@ -137,7 +142,16 @@ class SimulationRunReport:
     def from_dict(d: Dict[str, Any]) -> "SimulationRunReport":
         def _ls(key: str) -> LatencySummary:
             x = d[key]
-            return LatencySummary(**x)
+            return LatencySummary(
+                count=int(x["count"]),
+                min_s=(float(x["min_s"]) if x.get("min_s") is not None else None),
+                mean_s=(float(x["mean_s"]) if x.get("mean_s") is not None else None),
+                max_s=(float(x["max_s"]) if x.get("max_s") is not None else None),
+                p50_s=(float(x["p50_s"]) if x.get("p50_s") is not None else None),
+                p90_s=(float(x["p90_s"]) if x.get("p90_s") is not None else None),
+                p95_s=(float(x["p95_s"]) if x.get("p95_s") is not None else None),
+                p99_s=(float(x["p99_s"]) if x.get("p99_s") is not None else None),
+            )
 
         return SimulationRunReport(
             schema_version=int(d["schema_version"]),
@@ -207,6 +221,14 @@ class RunTelemetry:
         self._drift_samples = RingBuffer(max(1, min(10_000, self.sample_capacity)))
 
     # ---- lifecycle -------------------------------------------------
+
+    def elapsed_wall_s(self) -> float:
+        """Wall seconds since start() (or since construction before start)."""
+        return max(0.0, float(_now_monotonic() - self._t0))
+
+    def apply_latency_live(self) -> LatencySummary:
+        """Current apply_next_event latency quantiles without finishing the run."""
+        return summarize_latencies(self.apply_next_event_samples.values())
 
     def start(self, *, total_events: int) -> None:
         self.total_events = int(total_events)

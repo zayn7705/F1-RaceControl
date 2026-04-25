@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Terminal UI: race state + strategy recommendations (original StrategyEngine).
+Single-screen dashboard: race state + strategy + optional live metrics (dark theme).
 
 Requires: pip install rich
 
 Usage:
     python scripts/replay_strategy_ui.py --events data/sample_events_hungary_2022.jsonl
+    python scripts/replay_strategy_ui.py --events data/sample_events_hungary_2022.jsonl \\
+        --metrics-json telemetry_report.json
 """
 
 from __future__ import annotations
@@ -55,12 +57,12 @@ def load_events_from_jsonl(path: str) -> List[Dict]:
 def _try_import_rich():
     try:
         from rich import box as rich_box
+        from rich.columns import Columns
         from rich.console import Console, Group
         from rich.panel import Panel
         from rich.table import Table
         from rich.text import Text
-
-        return rich_box, Console, Group, Panel, Text
+        return rich_box, Columns, Console, Group, Panel, Table, Text
     except ImportError as e:
         raise SystemExit(
             "The strategy UI requires the 'rich' package.\n"
@@ -69,147 +71,311 @@ def _try_import_rich():
         ) from e
 
 
-def _driver_table(state: RaceState, box: Any, limit: int | None = 20) -> Any:
-    from rich.table import Table
+def _fmt_ms(s: Optional[float]) -> str:
+    if s is None:
+        return "—"
+    return f"{s * 1000:.3f}ms"
+
+
+def _dashboard_theme() -> Any:
+    from rich.theme import Theme
+
+    return Theme(
+        {
+            "dash.title": "bold #7aa2f7",
+            "dash.label": "#565f89",
+            "dash.value": "#c0caf5",
+            "dash.strong": "bold #c0caf5",
+            "dash.muted": "dim #565f89",
+            "dash.accent": "#bb9af7",
+            "dash.ok": "#9ece6a",
+            "dash.warn": "#e0af68",
+            "dash.bad": "#f7768e",
+            "dash.play": "bold #7dcfff",
+            "dash.pause": "dim #c0caf5",
+            "dash.header": "bold #7aa2f7",
+            "dash.border": "#3b4261",
+        }
+    )
+
+
+def _driver_table(
+    state: RaceState,
+    box: Any,
+    Table: Any,
+    *,
+    limit: int | None,
+    dark: bool,
+) -> Any:
+    header_style = "dash.header" if dark else "bold cyan"
+    border = "dash.border" if dark else "dim"
 
     t = Table(
         box=box.ROUNDED,
         show_header=True,
-        header_style="bold cyan",
-        border_style="dim",
+        header_style=header_style,
+        border_style=border,
         expand=True,
+        pad_edge=False,
     )
-    t.add_column("Pos", justify="right", style="bold", width=4)
-    t.add_column("Driver", style="white", width=5)
-    t.add_column("Lap", justify="right", width=4)
-    t.add_column("Gap", width=8)
-    t.add_column("Tire", width=7)
-    t.add_column("St", width=4)
-    t.add_column("Age", width=4)
-    t.add_column("Last lap", width=9)
+    t.add_column("Pos", justify="right", style="dash.strong" if dark else "bold", width=3)
+    t.add_column("Drv", style="dash.value" if dark else "white", width=4)
+    t.add_column("Lap", justify="right", width=3)
+    t.add_column("Gap", width=7)
+    t.add_column("Tire", width=6)
+    t.add_column("St", width=3)
+    t.add_column("Ag", width=3)
+    t.add_column("Last", width=8)
 
     drivers = running_order(state.drivers.values())
     if limit:
         drivers = drivers[:limit]
 
     for i, d in enumerate(drivers, start=1):
-        gap = f"{d.gap_to_leader_s:6.3f}" if d.gap_to_leader_s is not None else "  —"
-        tire = d.compound or "—"
+        gap = f"{d.gap_to_leader_s:5.2f}" if d.gap_to_leader_s is not None else "  —"
+        tire = (d.compound or "—")[:6]
         stint = str(d.stint) if d.stint is not None else "—"
         age = str(d.tire_age_laps) if d.tire_age_laps is not None else "—"
-        last_lap = f"{d.last_lap_time_s:7.3f}" if d.last_lap_time_s is not None else "   —"
-        t.add_row(str(i), d.driver_code, str(d.lap), gap, tire, stint, age, last_lap)
+        last_lap = f"{d.last_lap_time_s:6.3f}" if d.last_lap_time_s is not None else "   —"
+        t.add_row(str(i), d.driver_code, str(d.lap or 0), gap, tire, stint, age, last_lap)
     return t
 
 
-def _strategy_table(rows: List[Dict[str, Any]], box: Any, Text: Any) -> Any:
+def _strategy_table(rows: List[Dict[str, Any]], box: Any, Text: Any, *, dark: bool) -> Any:
     from rich.table import Table
 
     t = Table(
         box=box.SIMPLE,
         show_header=True,
-        header_style="bold magenta",
-        border_style="dim",
+        header_style="dash.accent" if dark else "bold magenta",
+        border_style="dash.border" if dark else "dim",
         expand=True,
         padding=(0, 1),
     )
-    t.add_column("Lap", style="dim", width=4)
-    t.add_column("Driver", width=5)
-    t.add_column("Call", width=10)
-    t.add_column("Pit window", width=11)
-    t.add_column("SC", width=12)
-    t.add_column("Tire", width=7)
+    t.add_column("Lp", style="dash.muted" if dark else "dim", width=3)
+    t.add_column("Drv", width=4)
+    t.add_column("Call", width=9)
+    t.add_column("Pit", width=9)
+    t.add_column("SC", width=10)
+    t.add_column("Tire", width=6)
 
     for row in rows:
         feat = row.get("features") or {}
         rec = row.get("recommendation", "—")
-        style = "dim"
+        style = "dash.muted" if dark else "dim"
         if rec == "undercut":
-            style = "bold green"
+            style = "dash.ok" if dark else "bold green"
         elif rec == "overcut":
-            style = "bold yellow"
+            style = "dash.warn" if dark else "bold yellow"
         t.add_row(
             str(row.get("lap", "—")),
             str(row.get("driver", "—")),
             Text(str(rec), style=style),
-            str(feat.get("pit_window", "—")),
-            str(feat.get("safety_car_trigger", "—")),
-            str(feat.get("compound") or "—"),
+            str(feat.get("pit_window", "—"))[:9],
+            str(feat.get("safety_car_trigger", "—"))[:10],
+            str(feat.get("compound") or "—")[:6],
         )
     return t
 
 
-def _build_layout(
+def _metrics_strip(
+    telemetry: RunTelemetry,
+    metrics_json: Optional[str],
+    Text: Any,
+    Group: Any,
+    *,
+    dark: bool,
+) -> Any:
+    lat = telemetry.apply_latency_live()
+    wall = telemetry.elapsed_wall_s()
+    eps = (telemetry.events_applied / wall) if wall > 0 else None
+    eps_s = f"{eps:.0f}" if eps is not None else "—"
+
+    line1 = Text.assemble(
+        ("evt ", "dash.label" if dark else "dim"),
+        (f"{telemetry.events_applied}/{telemetry.total_events}  ", "dash.value" if dark else ""),
+        (f"{eps_s} ev/s  ", "dash.value" if dark else ""),
+        ("p50 ", "dash.label" if dark else "dim"),
+        (_fmt_ms(lat.p50_s), "dash.play" if dark else "cyan"),
+        ("  p95 ", "dash.label" if dark else "dim"),
+        (_fmt_ms(lat.p95_s), "dash.play" if dark else "cyan"),
+        ("  p99 ", "dash.label" if dark else "dim"),
+        (_fmt_ms(lat.p99_s), "dash.muted" if dark else "dim"),
+    )
+    issues = (
+        f"stream_issues={telemetry.stream_issue_count} "
+        f"state_issues={telemetry.state_issue_count} "
+        f"exceptions={telemetry.exception_count}"
+    )
+    line2 = Text(
+        issues + (f"  → JSON: {metrics_json}" if metrics_json else ""),
+        style="dash.muted" if dark else "dim",
+    )
+    return Group(line1, line2)
+
+
+def _build_dashboard(
     state: Optional[RaceState],
     strategy_rows: List[Dict[str, Any]],
     race_complete: bool,
+    race_id: str,
+    events_path: str,
+    playing: bool,
+    speed: float,
+    telemetry: Optional[RunTelemetry],
+    metrics_json: Optional[str],
     box: Any,
+    Columns: Any,
     Group: Any,
     Panel: Any,
+    Table: Any,
     Text: Any,
+    *,
+    dark: bool,
+    max_drivers: int,
+    max_strat_rows: int,
 ) -> Any:
     if state is None or not state.drivers:
-        race_block: Any = Text("No drivers yet — use step or play.", style="italic dim")
-    else:
-        race_block = Group(
-            Text(format_header(state), style="bold white"),
-            Text(""),
-            _driver_table(state, box),
+        race_panel_inner: Any = Text(
+            "No drivers yet — step or play.",
+            style="dash.muted" if dark else "italic dim",
         )
+    else:
+        tbl = _driver_table(state, box, Table, limit=max_drivers, dark=dark)
+        hdr = Text(format_header(state), style="dash.value" if dark else "bold white")
+        race_panel_inner = Group(hdr, Text(""), tbl)
 
-    if strategy_rows:
-        st = _strategy_table(strategy_rows[-18:], box, Text)
-        strat_block = Group(
-            Text("Latest strategy emissions", style="bold magenta"),
+    strat_slice = strategy_rows[-max_strat_rows:] if strategy_rows else []
+    if strat_slice:
+        st = _strategy_table(strat_slice, box, Text, dark=dark)
+        strat_inner = Group(
+            Text("Strategy (latest)", style="dash.accent" if dark else "bold magenta"),
+            Text(""),
             st,
         )
     else:
-        strat_block = Text(
+        strat_inner = Text(
             "No strategy rows yet (every 5 laps + SC/VSC transitions).",
-            style="italic dim",
+            style="dash.muted" if dark else "italic dim",
         )
 
+    mode_s = "PLAY" if playing else "PAUSE"
+    mode_style = "dash.play" if (playing and dark) else ("dash.pause" if dark else ("bold cyan" if playing else "dim"))
+    status_bits: List[Any] = [
+        ("Race ", "dash.label" if dark else "dim"),
+        (race_id, "dash.title" if dark else "bold cyan"),
+        ("  ", ""),
+        (mode_s, mode_style),
+        (f"  speed×{speed:g}  ", "dash.value" if dark else ""),
+        (Path(events_path).name, "dash.muted" if dark else "dim"),
+    ]
+    if race_complete:
+        status_bits.append(("  FINISHED", "dash.ok" if dark else "bold green"))
+    status_line = Text.assemble(*status_bits)
+
+    metrics_block: Any
+    if telemetry is not None:
+        metrics_block = Panel(
+            _metrics_strip(telemetry, metrics_json, Text, Group, dark=dark),
+            title=Text("Performance", style="dash.header" if dark else "bold"),
+            border_style="dash.border" if dark else "dim",
+            padding=(0, 1),
+        )
+    else:
+        metrics_block = Text(
+            "Tip: add --metrics-json report.json for live latency (p50/p95) and throughput.",
+            style="dash.muted" if dark else "dim",
+        )
+
+    twin = Columns(
+        [
+            Panel(
+                race_panel_inner,
+                title=Text("Race state", style="dash.header" if dark else "bold cyan"),
+                border_style="dash.border" if dark else "cyan",
+                padding=(0, 1),
+            ),
+            Panel(
+                strat_inner,
+                title=Text("Strategy engine", style="dash.accent" if dark else "bold magenta"),
+                border_style="dash.border" if dark else "magenta",
+                padding=(0, 1),
+            ),
+        ],
+        expand=True,
+        equal=False,
+    )
+
+    log_hint = Text(
+        f"Logged to data/strategy_recs_{race_id}.jsonl",
+        style="dash.muted" if dark else "dim",
+    )
     footer = Text(
-        "Commands: step [n] | play | pause | speed <x> | quit | help — "
-        "Empty line = refresh (e.g. during play).",
-        style="dim",
+        "step [n] | play | pause | speed <x> | quit | help — empty line = refresh",
+        style="dash.muted" if dark else "dim",
     )
     if race_complete:
-        footer = Text("Race complete. Type quit to exit.", style="bold green")
+        footer = Text("Race complete — type quit to exit.", style="dash.ok" if dark else "bold green")
 
     body = Group(
-        race_block,
+        status_line,
         Text(""),
-        strat_block,
+        metrics_block,
+        Text(""),
+        twin,
+        Text(""),
+        log_hint,
         Text(""),
         footer,
     )
 
+    title = "[dash.title]RaceControl[/] — [dash.value]one-screen dashboard[/]"
+    if not dark:
+        title = "[bold cyan]RaceControl[/] — [white]one-screen dashboard[/]"
+
     return Panel(
         body,
-        title="[bold cyan]RaceControl[/] — strategy + state",
-        subtitle="[dim]Also logged to data/strategy_recs_<race_id>.jsonl[/]",
-        border_style="cyan",
+        title=title,
+        border_style="dash.border" if dark else "cyan",
+        style="on #16161e" if dark else "",
         padding=(1, 2),
     )
 
 
 def main() -> None:
-    box, Console, Group, Panel, Text = _try_import_rich()
+    box, Columns, Console, Group, Panel, Table, Text = _try_import_rich()
 
-    parser = argparse.ArgumentParser(description="Replay UI with strategy recommendations")
+    parser = argparse.ArgumentParser(description="Replay dashboard: state + strategy + metrics")
     parser.add_argument("--events", type=str, required=True, help="Path to JSONL events file")
     parser.add_argument("--race-id", type=str, default=None)
     parser.add_argument("--snapshot-interval", type=int, default=50)
     parser.add_argument("--initial-speed", type=float, default=20.0)
-    parser.add_argument("--metrics-json", type=str, default=None, help="Write a per-run metrics report JSON to this path")
+    parser.add_argument("--metrics-json", type=str, default=None, help="Write run metrics JSON; enables live stats strip")
     parser.add_argument(
         "--check-every",
         type=int,
         default=0,
-        help="Run state consistency checks every N events (0 = only at end when metrics enabled)",
+        help="State consistency checks every N events (0 = only at end when metrics enabled)",
+    )
+    parser.add_argument(
+        "--light",
+        action="store_true",
+        help="Light terminal theme instead of default dark dashboard",
+    )
+    parser.add_argument(
+        "--max-drivers",
+        type=int,
+        default=18,
+        help="Max rows in the running-order table (default fits one screen)",
+    )
+    parser.add_argument(
+        "--max-strategy-rows",
+        type=int,
+        default=14,
+        help="Max recent strategy emissions to show",
     )
     args = parser.parse_args()
+    dark = not args.light
 
     events = load_events_from_jsonl(args.events)
     if not events:
@@ -228,6 +394,10 @@ def main() -> None:
         "race_complete": False,
     }
 
+    telemetry = RunTelemetry(race_id=race_id) if args.metrics_json else None
+    if telemetry is not None:
+        telemetry.record_stream_issues(validate_event_stream(events))
+
     def on_state_update(state: RaceState) -> None:
         recs = strategy_engine.observe(state, race_id=race_id)
         if recs:
@@ -242,9 +412,6 @@ def main() -> None:
             if len(events) > 0 and state.current_event_index >= len(events) - 1:
                 shared["race_complete"] = True
 
-    telemetry = RunTelemetry(race_id=race_id) if args.metrics_json else None
-    if telemetry is not None:
-        telemetry.record_stream_issues(validate_event_stream(events))
     controller = ReplayController(
         events,
         snapshot_interval_events=args.snapshot_interval,
@@ -258,22 +425,47 @@ def main() -> None:
     with ui_lock:
         shared["state"] = controller.engine.get_state()
 
-    console = Console()
+    console = Console(theme=_dashboard_theme() if dark else Theme({}), highlight=False)
 
     def render() -> Any:
         with ui_lock:
             st = shared.get("state")
             rc = shared.get("race_complete", False)
             rows_copy = list(strat_rows)
-        return _build_layout(st, rows_copy, rc, box, Group, Panel, Text)
+        playing = controller.is_playing()
+        spd = controller.playback_speed
+        return _build_dashboard(
+            st,
+            rows_copy,
+            rc,
+            race_id,
+            args.events,
+            playing,
+            spd,
+            telemetry,
+            args.metrics_json,
+            box,
+            Columns,
+            Group,
+            Panel,
+            Table,
+            Text,
+            dark=dark,
+            max_drivers=args.max_drivers,
+            max_strat_rows=args.max_strategy_rows,
+        )
 
-    console.print(
-        "[dim]Main-thread input: type at [bold]>[/] after each screen update. "
-        "Rich Live was removed so stdin works in VS Code / Cursor terminals. "
-        "After [bold]play[/], press Enter to refresh, or [bold]pause[/] then Enter.[/]\n"
+    intro = (
+        "[dash.muted]Main-thread input: type at[/] [dash.title]>[/] [dash.muted]after each draw. "
+        "During play, press Enter to refresh; pause stops the background loop.[/]\n"
     )
+    if not dark:
+        intro = (
+            "[dim]Main-thread input: type at[/] [bold]>[/] [dim]after each draw. "
+            "During play, press Enter to refresh; pause stops the background loop.[/]\n"
+        )
+    console.print(intro)
 
-    # One clear+draw per interaction: avoids stacked panels and broken background-thread stdin.
     try:
         while True:
             with ui_lock:
@@ -311,7 +503,8 @@ def main() -> None:
                 st = controller.engine.get_state()
                 telemetry.record_state_issues(check_state(st, st.current_event_index))
             report = telemetry.report()
-            console.print("\n[bold cyan]Run metrics[/]")
+            hdr = "Run metrics" if not dark else "[dash.title]Run metrics[/]"
+            console.print(f"\n{hdr}")
             console.print(
                 f"Completed: {report.completed} | Events: {report.events_applied}/{report.total_events} | "
                 f"Wall: {report.wall_time_s:.3f}s | Throughput: {(report.events_per_s or 0.0):.1f} ev/s"
@@ -320,6 +513,7 @@ def main() -> None:
                 "apply_next_event latency (s): "
                 f"p50={report.apply_next_event_latency.p50_s} "
                 f"p90={report.apply_next_event_latency.p90_s} "
+                f"p95={report.apply_next_event_latency.p95_s} "
                 f"p99={report.apply_next_event_latency.p99_s}"
             )
             with open(args.metrics_json, "w", encoding="utf-8") as f:

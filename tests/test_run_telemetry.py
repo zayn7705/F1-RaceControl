@@ -24,6 +24,7 @@ def test_summarize_latencies_basic_quantiles() -> None:
     assert s.max_s == 4.0
     assert s.p50_s is not None and 1.0 <= s.p50_s <= 4.0
     assert s.p90_s is not None and s.p90_s >= s.p50_s
+    assert s.p95_s is not None and s.p95_s >= s.p50_s and s.p95_s <= s.p99_s
 
 
 def test_instrumented_engine_records_applies_and_seeks() -> None:

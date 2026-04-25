@@ -82,6 +82,11 @@ class ReplayController:
         with self._lock:
             self.playback_speed = speed
 
+    def is_playing(self) -> bool:
+        """Thread-safe read of whether the background play loop is active."""
+        with self._lock:
+            return self._playing
+
     def stop(self) -> None:
         """Stop playback thread and reset playing flag."""
         with self._lock:

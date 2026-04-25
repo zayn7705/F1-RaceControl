@@ -10,7 +10,7 @@ Deterministic **F1 race replay** from historical telemetry, plus **strategy hint
 | **Replay engine** | [`src/replay/engine.py`](src/replay/engine.py) — walks JSONL in order, updates [`RaceState`](src/replay/state.py) (drivers, gaps, tires, track status). |
 | **Strategy engine** | [`src/strategy/engine.py`](src/strategy/engine.py) — on replay, emits periodic + SC/VSC transition recommendations; logs JSONL. |
 | **Replay CLI** | [`scripts/replay_cli.py`](scripts/replay_cli.py) — interactive `play` / `step` / seek / snapshots. |
-| **Strategy dashboard** | [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py) — one terminal view: race table + latest strategy rows (needs `rich`). |
+| **Strategy dashboard** | [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py) — one-screen terminal dashboard (dark by default): race table + strategy rows + live metrics strip. |
 | **What-if (Hungary) — exploratory** | [`src/strategy_mvp/`](src/strategy_mvp/) + [`scripts/strategy_mvp_cli.py`](scripts/strategy_mvp_cli.py) — **work in progress**: prototype to explore counterfactual pits vs a **model benchmark** (simulated; scope and UX still evolving). |
 
 ## Quick start
@@ -155,13 +155,25 @@ Example row shape:
 
 ## Strategy + race dashboard (terminal UI)
 
-Combines **the same replay + strategy logging** with a **Rich** layout: header (time, event index, track), driver table, latest strategy rows.
+Combines **the same replay + strategy logging** with a **Rich** one-screen layout: race/status line, performance strip, driver table, and latest strategy rows.
 
 ```bash
-python scripts/replay_strategy_ui.py --events data/sample_events_hungary_2022.jsonl
+python scripts/replay_strategy_ui.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json
 ```
 
-Uses **`> `** prompt on the **main thread** (works reliably in VS Code / Cursor terminals). Commands: `step [n]`, `play`, `pause`, `speed`, `quit`, `help`. **Empty line** redraws (useful during `play`). Strategy JSONL path is unchanged. Playback does **not** force-process exit on race end so you can read the screen and type `quit`.
+Uses **`> `** prompt on the **main thread** (works reliably in VS Code / Cursor terminals). Commands: `step [n]`, `play`, `pause`, `speed <x>`, `quit`, `help`. **Empty line** redraws (useful during `play`). Strategy JSONL path is unchanged. Playback does **not** force-process exit on race end so you can read the screen and type `quit`.
+
+Speed notes:
+- `speed 1` = real-time replay (same timing as the historical race timeline).
+- `speed 20` = 20x faster than real-time.
+- `speed 0.5` = half-speed (slower than real-time).
+
+Useful run patterns:
+- Fast interactive run: `speed 100`, then `play`.
+- Full non-interactive run to completion: use `scripts/replay_cli.py` with `--metrics-json`.
+- Light terminal themes: add `--light` to disable the dark dashboard palette.
 
 ---
 

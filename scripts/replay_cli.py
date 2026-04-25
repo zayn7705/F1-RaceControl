@@ -242,6 +242,7 @@ def main() -> None:
                 "apply_next_event latency (s): "
                 f"p50={report.apply_next_event_latency.p50_s} "
                 f"p90={report.apply_next_event_latency.p90_s} "
+                f"p95={report.apply_next_event_latency.p95_s} "
                 f"p99={report.apply_next_event_latency.p99_s}"
             )
             with open(args.metrics_json, "w", encoding="utf-8") as f:
