@@ -40,6 +40,7 @@
 We are **exploring** an interactive counterfactual mode on top of the same event data: `src/strategy_mvp/` and `scripts/strategy_mvp_cli.py` (simple time model, benchmark among candidate strategies). This is a **prototype** for learning and iteration—physics, UX, and promises are **not** frozen. See `README.md`. It does not change the deterministic replay contract.
 
 ### Checkpoint 5: Reliability + Metrics + Demo
+- **Status**: Complete
 - **Target Date**: Week 15
 - **Deliverables**:
   - Checkpointing and crash recovery
@@ -47,4 +48,6 @@ We are **exploring** an interactive counterfactual mode on top of the same event
   - Performance instrumentation (latency, throughput)
   - Performance report (p50/p95 metrics)
   - CLI demo with live updates
+  - **Single-screen dark dashboard** (`replay_strategy_ui.py`): race order, strategy, status, and optional live metrics strip in one view (`--metrics-json`); `--light` for light terminals
+  - Replay speed guidance documented (`speed 1` = real-time; `speed N` = Nx)
 - **Success Criteria**: Full race demo with recovery and performance results

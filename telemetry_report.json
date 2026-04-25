@@ -1,0 +1,52 @@
+{
+  "apply_next_event_latency": {
+    "count": 1444,
+    "max_s": 0.005877749994397163,
+    "mean_s": 0.00035809002893427363,
+    "min_s": 6.591598503291607e-05,
+    "p50_s": 0.00015002104919403791,
+    "p90_s": 0.0010342160589061678,
+    "p95_s": 0.0012351295212283731,
+    "p99_s": 0.001541354645742103
+  },
+  "callback_latency": {
+    "count": 1444,
+    "max_s": 0.005840291967615485,
+    "mean_s": 3.653638981672267e-05,
+    "min_s": 4.874891601502895e-06,
+    "p50_s": 6.66698906570673e-06,
+    "p90_s": 7.285007741302252e-05,
+    "p95_s": 9.530807146802543e-05,
+    "p99_s": 0.0002730753365904092
+  },
+  "completed": true,
+  "events_applied": 1444,
+  "events_per_s": 21.02485020810665,
+  "exception_count": 0,
+  "exception_samples": [],
+  "platform_info": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9"
+  },
+  "race_id": "hungary_2022",
+  "replay_drift_max_s": 0.011313624967442593,
+  "replay_drift_mean_s": 0.003947673762655909,
+  "run_id": "114d0227-c505-4277-ae2f-85ad37190bce",
+  "schema_version": 1,
+  "seek_latency": {
+    "count": 0,
+    "max_s": null,
+    "mean_s": null,
+    "min_s": null,
+    "p50_s": null,
+    "p90_s": null,
+    "p95_s": null,
+    "p99_s": null
+  },
+  "state_issue_count": 0,
+  "state_issue_samples": [],
+  "stream_issue_count": 0,
+  "stream_issue_samples": [],
+  "total_events": 1444,
+  "wall_time_s": 68.68063200009055
+}

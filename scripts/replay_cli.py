@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from replay.controller import ReplayController  # type: ignore  # noqa: E402
 from replay.snapshot_io import save_snapshot  # type: ignore  # noqa: E402
+from replay.run_telemetry import RunTelemetry  # type: ignore  # noqa: E402
+from replay.validation import check_state, validate_event_stream  # type: ignore  # noqa: E402
 from strategy.engine import StrategyEngine  # type: ignore  # noqa: E402
 from strategy.logger import StrategyJsonlLogger  # type: ignore  # noqa: E402
 
@@ -173,6 +175,18 @@ def main() -> None:
         default=1.0,
         help="Initial playback speed multiplier (default: 1.0)",
     )
+    parser.add_argument(
+        "--check-every",
+        type=int,
+        default=0,
+        help="Run state consistency checks every N events (0 = only at end when metrics enabled)",
+    )
+    parser.add_argument(
+        "--metrics-json",
+        type=str,
+        default=None,
+        help="Write a per-run metrics report JSON to this path",
+    )
 
     args = parser.parse_args()
 
@@ -192,18 +206,48 @@ def main() -> None:
         recs = strategy_engine.observe(state, race_id=race_id)
         if recs:
             strategy_logger.append(race_id=race_id, recs=recs)
+        if telemetry is not None and args.check_every and state.current_event_index % args.check_every == 0:
+            telemetry.record_state_issues(check_state(state, state.current_event_index))
 
+    telemetry = RunTelemetry(race_id=race_id) if args.metrics_json else None
+    if telemetry is not None:
+        telemetry.record_stream_issues(validate_event_stream(events))
     controller = ReplayController(
         events,
         snapshot_interval_events=args.snapshot_interval,
         initial_speed=args.initial_speed,
         on_state_update=on_state_update,
+        telemetry=telemetry,
     )
 
     try:
         repl(controller, race_id, snapshots_dir)
     finally:
         controller.stop()
+        if telemetry is not None:
+            if not args.check_every:
+                # If the user didn't request periodic checks, run one final consistency pass.
+                st = controller.engine.get_state()
+                telemetry.record_state_issues(check_state(st, st.current_event_index))
+            report = telemetry.report()
+            print("\n" + "=" * 60)
+            print("RUN METRICS")
+            print("=" * 60)
+            print(
+                f"Completed: {report.completed} | Events: {report.events_applied}/{report.total_events} | "
+                f"Wall: {report.wall_time_s:.3f}s | Throughput: "
+                f"{(report.events_per_s or 0.0):.1f} ev/s"
+            )
+            print(
+                "apply_next_event latency (s): "
+                f"p50={report.apply_next_event_latency.p50_s} "
+                f"p90={report.apply_next_event_latency.p90_s} "
+                f"p95={report.apply_next_event_latency.p95_s} "
+                f"p99={report.apply_next_event_latency.p99_s}"
+            )
+            with open(args.metrics_json, "w", encoding="utf-8") as f:
+                f.write(report.to_json(indent=2))
+            print(f"Metrics JSON written to {args.metrics_json}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # RaceControl
 
-Deterministic **F1 race replay** from historical telemetry, plus **strategy hints** (undercut/overcut heuristic). A **Hungary 2022 interactive what-if prototype** (`strategy_mvp`) is **in progress**—a space to explore counterfactual pit/stint play and model benchmarks, not a finished product. Built as a real-time systems course project: same event log → same state; bounded, explainable strategy logic.
+Deterministic **F1 race replay dashboard** from historical telemetry, with built-in **strategy hints** (undercut/overcut heuristic), live race state, and run metrics. The main product is the one-screen terminal UI in [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py). A **Hungary 2022 interactive what-if prototype** (`strategy_mvp`) is **in progress** as a separate exploratory track.
 
 ## What this repository does
 
@@ -9,24 +9,31 @@ Deterministic **F1 race replay** from historical telemetry, plus **strategy hint
 | **Ingestion** | FastF1 → canonical events (`lap_complete`, `pit_stop`, `track_status`) in [`schemas/event_schema.json`](schemas/event_schema.json). |
 | **Replay engine** | [`src/replay/engine.py`](src/replay/engine.py) — walks JSONL in order, updates [`RaceState`](src/replay/state.py) (drivers, gaps, tires, track status). |
 | **Strategy engine** | [`src/strategy/engine.py`](src/strategy/engine.py) — on replay, emits periodic + SC/VSC transition recommendations; logs JSONL. |
-| **Replay CLI** | [`scripts/replay_cli.py`](scripts/replay_cli.py) — interactive `play` / `step` / seek / snapshots. |
-| **Strategy dashboard** | [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py) — one terminal view: race table + latest strategy rows (needs `rich`). |
+| **Strategy dashboard (final product)** | [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py) — one-screen terminal dashboard (dark by default): race table + strategy rows + live metrics strip. |
+| **Replay CLI** | [`scripts/replay_cli.py`](scripts/replay_cli.py) — lower-level interactive `play` / `step` / seek / snapshots runner. |
 | **What-if (Hungary) — exploratory** | [`src/strategy_mvp/`](src/strategy_mvp/) + [`scripts/strategy_mvp_cli.py`](scripts/strategy_mvp_cli.py) — **work in progress**: prototype to explore counterfactual pits vs a **model benchmark** (simulated; scope and UX still evolving). |
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-python scripts/hello_world.py
 ```
 
-Export a race once (needs FastF1; cache helps offline reuse):
+Export a race once (needs FastF1; cache helps offline reuse), then launch the dashboard:
 
 ```bash
 python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/sample_events_hungary_2022.jsonl
+python scripts/replay_strategy_ui.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json
 ```
 
-For the **Hungary what-if explorer** (full race, no `--max-events`):
+At the prompt, use:
+- `play` to run continuously
+- `speed 1` for real-time, `speed 50` (or higher) for faster-than-real-time
+- `pause` / `quit` as needed
+
+For the **Hungary what-if explorer** (separate prototype; full race, no `--max-events`):
 
 ```bash
 python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/hungary_2022_r.jsonl
@@ -84,20 +91,48 @@ Options: `--events` (required), `--race-id`, `--snapshot-interval`, `--initial-s
 
 During **`play`**, status prints are **throttled** per lap (readable terminal); the engine still processes **every** event. At the **last event**, the CLI prints final state and exits.
 
+### Run metrics (latency, throughput, reliability)
+
+Both replay entrypoints can optionally record **run metrics** and write a **post-run report JSON** (latency percentiles, throughput, stream/state issue counts, exceptions, replay drift during `play`).
+
+**Replay CLI**
+
+```bash
+python scripts/replay_cli.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json \
+  --check-every 500
+```
+
+- `--metrics-json`: enables telemetry and writes the report JSON to the given path.
+- `--check-every N`: runs state consistency checks every N events (use `0` to only check once at the end).
+
+**Strategy UI**
+
+```bash
+python scripts/replay_strategy_ui.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json
+```
+
 ---
 
 ## Strategy recommendations (replay-integrated)
 
-While events are applied (replay CLI or strategy UI), [`StrategyEngine`](src/strategy/engine.py) runs on each state update and can emit **one row per driver** when:
+In the dashboard, the right-hand **Strategy engine** panel shows the latest recommendation rows as replay runs.
 
-- **Periodic:** `max(lap)` is a multiple of **5** (configurable `emit_every_laps`), once per lap tick; or  
-- **SC/VSC transitions:** track status **enters** or **leaves** safety car / VSC (extra emit so triggers are not missed between 5-lap ticks).
+What you see in the UI:
+- One row per driver at each strategy emit point.
+- **Call** column: `undercut` / `overcut` / `other` (heuristic lean, not a full race optimizer).
+- **Pit** column: `immediate` / `opening` / `hold`.
+- **SC** column: `none` / `deployment` / `cleared` / `active`.
+- **Tire** column: current compound context for that recommendation.
 
-**Labels**
+When rows appear:
+- **Periodic emits:** once every 5 laps (configurable with `emit_every_laps`).
+- **Track status transitions:** extra emits when SC/VSC is entered or cleared.
 
-- **`recommendation`:** `undercut` / `overcut` / `other` — rough lean toward **stopping earlier** vs **staying out** from a **heuristic** (tires, gaps, position, SC), not a full race simulation.
-- **`pit_window`:** `immediate` / `opening` / `hold` — simple stint window hint.
-- **`safety_car_trigger`:** `none` / `deployment` / `cleared` / `active` — caution-related signal on that row.
+Under the hood, this is produced by [`StrategyEngine`](src/strategy/engine.py) on each replay state update (dashboard or CLI).
 
 **Output file (append-only)**
 
@@ -131,13 +166,25 @@ Example row shape:
 
 ## Strategy + race dashboard (terminal UI)
 
-Combines **the same replay + strategy logging** with a **Rich** layout: header (time, event index, track), driver table, latest strategy rows.
+Combines **the same replay + strategy logging** with a **Rich** one-screen layout: race/status line, performance strip, driver table, and latest strategy rows.
 
 ```bash
-python scripts/replay_strategy_ui.py --events data/sample_events_hungary_2022.jsonl
+python scripts/replay_strategy_ui.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json
 ```
 
-Uses **`> `** prompt on the **main thread** (works reliably in VS Code / Cursor terminals). Commands: `step [n]`, `play`, `pause`, `speed`, `quit`, `help`. **Empty line** redraws (useful during `play`). Strategy JSONL path is unchanged. Playback does **not** force-process exit on race end so you can read the screen and type `quit`.
+Uses **`> `** prompt on the **main thread** (works reliably in VS Code / Cursor terminals). Commands: `step [n]`, `play`, `pause`, `speed <x>`, `quit`, `help`. **Empty line** redraws (useful during `play`). Strategy JSONL path is unchanged. Playback does **not** force-process exit on race end so you can read the screen and type `quit`.
+
+Speed notes:
+- `speed 1` = real-time replay (same timing as the historical race timeline).
+- `speed 20` = 20x faster than real-time.
+- `speed 0.5` = half-speed (slower than real-time).
+
+Useful run patterns:
+- Fast interactive run: `speed 100`, then `play`.
+- Full non-interactive run to completion: use `scripts/replay_cli.py` with `--metrics-json`.
+- Light terminal themes: add `--light` to disable the dark dashboard palette.
 
 ---
 

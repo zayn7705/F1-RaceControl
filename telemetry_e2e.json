@@ -1,0 +1,49 @@
+{
+  "apply_next_event_latency": {
+    "count": 1444,
+    "max_s": 0.01870204199803993,
+    "mean_s": 0.00020347685212755725,
+    "min_s": 6.458983989432454e-06,
+    "p50_s": 0.00015343799896072596,
+    "p90_s": 0.0001718123006867245,
+    "p99_s": 0.0008105524512939141
+  },
+  "callback_latency": {
+    "count": 1444,
+    "max_s": 0.0035697919956874102,
+    "mean_s": 1.4613425609696956e-05,
+    "min_s": 3.7500285543501377e-07,
+    "p50_s": 6.4159976318478584e-06,
+    "p90_s": 7.208000170066953e-06,
+    "p99_s": 0.00034112210647435745
+  },
+  "completed": true,
+  "events_applied": 1444,
+  "events_per_s": 4532.295153342321,
+  "exception_count": 0,
+  "exception_samples": [],
+  "platform_info": {
+    "platform": "macOS-14.6.1-arm64-arm-64bit",
+    "python": "3.12.2"
+  },
+  "race_id": "hungary_2022",
+  "replay_drift_max_s": null,
+  "replay_drift_mean_s": null,
+  "run_id": "4ac733c6-2a7c-4483-9319-b9d604d03b0b",
+  "schema_version": 1,
+  "seek_latency": {
+    "count": 0,
+    "max_s": null,
+    "mean_s": null,
+    "min_s": null,
+    "p50_s": null,
+    "p90_s": null,
+    "p99_s": null
+  },
+  "state_issue_count": 0,
+  "state_issue_samples": [],
+  "stream_issue_count": 0,
+  "stream_issue_samples": [],
+  "total_events": 1444,
+  "wall_time_s": 0.31860237498767674
+}
