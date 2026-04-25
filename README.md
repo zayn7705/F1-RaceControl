@@ -1,6 +1,6 @@
 # RaceControl
 
-Deterministic **F1 race replay** from historical telemetry, plus **strategy hints** (undercut/overcut heuristic). A **Hungary 2022 interactive what-if prototype** (`strategy_mvp`) is **in progress**—a space to explore counterfactual pit/stint play and model benchmarks, not a finished product. Built as a real-time systems course project: same event log → same state; bounded, explainable strategy logic.
+Deterministic **F1 race replay dashboard** from historical telemetry, with built-in **strategy hints** (undercut/overcut heuristic), live race state, and run metrics. The main product is the one-screen terminal UI in [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py). A **Hungary 2022 interactive what-if prototype** (`strategy_mvp`) is **in progress** as a separate exploratory track.
 
 ## What this repository does
 
@@ -9,24 +9,31 @@ Deterministic **F1 race replay** from historical telemetry, plus **strategy hint
 | **Ingestion** | FastF1 → canonical events (`lap_complete`, `pit_stop`, `track_status`) in [`schemas/event_schema.json`](schemas/event_schema.json). |
 | **Replay engine** | [`src/replay/engine.py`](src/replay/engine.py) — walks JSONL in order, updates [`RaceState`](src/replay/state.py) (drivers, gaps, tires, track status). |
 | **Strategy engine** | [`src/strategy/engine.py`](src/strategy/engine.py) — on replay, emits periodic + SC/VSC transition recommendations; logs JSONL. |
-| **Replay CLI** | [`scripts/replay_cli.py`](scripts/replay_cli.py) — interactive `play` / `step` / seek / snapshots. |
-| **Strategy dashboard** | [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py) — one-screen terminal dashboard (dark by default): race table + strategy rows + live metrics strip. |
+| **Strategy dashboard (final product)** | [`scripts/replay_strategy_ui.py`](scripts/replay_strategy_ui.py) — one-screen terminal dashboard (dark by default): race table + strategy rows + live metrics strip. |
+| **Replay CLI** | [`scripts/replay_cli.py`](scripts/replay_cli.py) — lower-level interactive `play` / `step` / seek / snapshots runner. |
 | **What-if (Hungary) — exploratory** | [`src/strategy_mvp/`](src/strategy_mvp/) + [`scripts/strategy_mvp_cli.py`](scripts/strategy_mvp_cli.py) — **work in progress**: prototype to explore counterfactual pits vs a **model benchmark** (simulated; scope and UX still evolving). |
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-python scripts/hello_world.py
 ```
 
-Export a race once (needs FastF1; cache helps offline reuse):
+Export a race once (needs FastF1; cache helps offline reuse), then launch the dashboard:
 
 ```bash
 python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/sample_events_hungary_2022.jsonl
+python scripts/replay_strategy_ui.py \
+  --events data/sample_events_hungary_2022.jsonl \
+  --metrics-json telemetry_report.json
 ```
 
-For the **Hungary what-if explorer** (full race, no `--max-events`):
+At the prompt, use:
+- `play` to run continuously
+- `speed 1` for real-time, `speed 50` (or higher) for faster-than-real-time
+- `pause` / `quit` as needed
+
+For the **Hungary what-if explorer** (separate prototype; full race, no `--max-events`):
 
 ```bash
 python scripts/export_events.py --year 2022 --gp Hungary --session R --out data/hungary_2022_r.jsonl
