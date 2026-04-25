@@ -119,16 +119,20 @@ python scripts/replay_strategy_ui.py \
 
 ## Strategy recommendations (replay-integrated)
 
-While events are applied (replay CLI or strategy UI), [`StrategyEngine`](src/strategy/engine.py) runs on each state update and can emit **one row per driver** when:
+In the dashboard, the right-hand **Strategy engine** panel shows the latest recommendation rows as replay runs.
 
-- **Periodic:** `max(lap)` is a multiple of **5** (configurable `emit_every_laps`), once per lap tick; or  
-- **SC/VSC transitions:** track status **enters** or **leaves** safety car / VSC (extra emit so triggers are not missed between 5-lap ticks).
+What you see in the UI:
+- One row per driver at each strategy emit point.
+- **Call** column: `undercut` / `overcut` / `other` (heuristic lean, not a full race optimizer).
+- **Pit** column: `immediate` / `opening` / `hold`.
+- **SC** column: `none` / `deployment` / `cleared` / `active`.
+- **Tire** column: current compound context for that recommendation.
 
-**Labels**
+When rows appear:
+- **Periodic emits:** once every 5 laps (configurable with `emit_every_laps`).
+- **Track status transitions:** extra emits when SC/VSC is entered or cleared.
 
-- **`recommendation`:** `undercut` / `overcut` / `other` — rough lean toward **stopping earlier** vs **staying out** from a **heuristic** (tires, gaps, position, SC), not a full race simulation.
-- **`pit_window`:** `immediate` / `opening` / `hold` — simple stint window hint.
-- **`safety_car_trigger`:** `none` / `deployment` / `cleared` / `active` — caution-related signal on that row.
+Under the hood, this is produced by [`StrategyEngine`](src/strategy/engine.py) on each replay state update (dashboard or CLI).
 
 **Output file (append-only)**
 
